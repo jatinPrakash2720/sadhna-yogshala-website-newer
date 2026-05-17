@@ -7,6 +7,46 @@ import type { IWorkshop } from "@/types";
 import type { CreateWorkshopInput, UpdateWorkshopInput, WorkshopQueryInput } from "@/validations/workshop.validation";
 
 export class WorkshopService {
+  private static getMockWorkshopById(id: string) {
+    return MOCK_WORKSHOPS.find((item) => String(item._id) === id) ?? null;
+  }
+
+  private static getMockWorkshopBySlug(slug: string) {
+    return MOCK_WORKSHOPS.find((item) => item.slug === slug) ?? null;
+  }
+
+  private static getMockWorkshopList(query: WorkshopQueryInput, page: number, limit: number) {
+    const filteredMocks = MOCK_WORKSHOPS.filter((workshop) => {
+      if (typeof query.isPublished === "boolean" && workshop.isPublished !== query.isPublished) return false;
+      if (query.category && workshop.category !== query.category) return false;
+      if (query.mode && workshop.mode !== query.mode) return false;
+      if (query.upcoming && new Date(workshop.startDate).getTime() < Date.now()) return false;
+      if (query.search) {
+        const needle = query.search.toLowerCase();
+        const haystack = `${workshop.title} ${workshop.shortDescription} ${workshop.fullDescription} ${workshop.category}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+    const total = filteredMocks.length;
+    const start = (page - 1) * limit;
+    const workshops = filteredMocks.slice(start, start + limit);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      workshops,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
   static async create(data: CreateWorkshopInput) {
     return WorkshopRepository.create({
       ...data,
@@ -16,13 +56,23 @@ export class WorkshopService {
   }
 
   static async getById(id: string) {
-    const workshop = await WorkshopRepository.findById(id);
-    return workshop ?? MOCK_WORKSHOPS.find((item) => String(item._id) === id) ?? null;
+    try {
+      const workshop = await WorkshopRepository.findById(id);
+      return workshop ?? this.getMockWorkshopById(id);
+    } catch (error) {
+      console.warn("Falling back to mock workshop by id because MongoDB is unavailable:", error);
+      return this.getMockWorkshopById(id);
+    }
   }
 
   static async getBySlug(slug: string) {
-    const workshop = await WorkshopRepository.findBySlug(slug);
-    return workshop ?? MOCK_WORKSHOPS.find((item) => item.slug === slug) ?? null;
+    try {
+      const workshop = await WorkshopRepository.findBySlug(slug);
+      return workshop ?? this.getMockWorkshopBySlug(slug);
+    } catch (error) {
+      console.warn("Falling back to mock workshop by slug because MongoDB is unavailable:", error);
+      return this.getMockWorkshopBySlug(slug);
+    }
   }
 
   static async update(id: string, data: UpdateWorkshopInput) {
@@ -56,45 +106,23 @@ export class WorkshopService {
     if (typeof query.isPublished === "boolean") filter.isPublished = query.isPublished;
     if (query.upcoming) filter.startDate = { $gte: new Date() };
 
-    const { workshops, total } = await WorkshopRepository.findAll({
-      filter,
-      search: query.search,
-      page,
-      limit,
-      sort: { startDate: 1 },
-    });
+    let workshops: IWorkshop[];
+    let total: number;
 
-    if (total === 0) {
-      const filteredMocks = MOCK_WORKSHOPS.filter((workshop) => {
-        if (typeof query.isPublished === "boolean" && workshop.isPublished !== query.isPublished) return false;
-        if (query.category && workshop.category !== query.category) return false;
-        if (query.mode && workshop.mode !== query.mode) return false;
-        if (query.upcoming && new Date(workshop.startDate).getTime() < Date.now()) return false;
-        if (query.search) {
-          const needle = query.search.toLowerCase();
-          const haystack = `${workshop.title} ${workshop.shortDescription} ${workshop.fullDescription} ${workshop.category}`.toLowerCase();
-          if (!haystack.includes(needle)) return false;
-        }
-        return true;
-      }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-
-      const mockTotal = filteredMocks.length;
-      const start = (page - 1) * limit;
-      const paged = filteredMocks.slice(start, start + limit);
-      const mockTotalPages = Math.ceil(mockTotal / limit);
-
-      return {
-        workshops: paged,
-        pagination: {
-          page,
-          limit,
-          total: mockTotal,
-          totalPages: mockTotalPages,
-          hasNextPage: page < mockTotalPages,
-          hasPrevPage: page > 1,
-        },
-      };
+    try {
+      ({ workshops, total } = await WorkshopRepository.findAll({
+        filter,
+        search: query.search,
+        page,
+        limit,
+        sort: { startDate: 1 },
+      }));
+    } catch (error) {
+      console.warn("Falling back to mock workshops because MongoDB is unavailable:", error);
+      return this.getMockWorkshopList(query, page, limit);
     }
+
+    if (total === 0) return this.getMockWorkshopList(query, page, limit);
 
     const totalPages = Math.ceil(total / limit);
     return {
