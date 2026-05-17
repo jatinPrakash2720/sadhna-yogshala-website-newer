@@ -15,6 +15,7 @@ import { UserRole } from "@/constants";
  * Does NOT include database adapter (not available on Edge).
  */
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,

@@ -69,6 +69,8 @@ Edit `.env.local` with your actual values:
 ```env
 MONGODB_URI=mongodb+srv://...
 AUTH_SECRET=<generate with: openssl rand -base64 32>
+AUTH_URL=http://localhost:3000
+AUTH_TRUST_HOST=true
 AUTH_GOOGLE_ID=<from Google Cloud Console>
 AUTH_GOOGLE_SECRET=<from Google Cloud Console>
 RAZORPAY_KEY_ID=rzp_test_...
