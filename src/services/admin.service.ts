@@ -8,7 +8,7 @@ import { CourseRepository } from "@/repositories/course.repository";
 import { EnrollmentRepository } from "@/repositories/enrollment.repository";
 import { PaymentRepository } from "@/repositories/payment.repository";
 import { UserRole, UserStatus, PaymentStatus } from "@/constants";
-import type { DashboardStats } from "@/types";
+import type { DashboardStats, IUser } from "@/types";
 
 export class AdminService {
   /**
@@ -49,12 +49,13 @@ export class AdminService {
   }
 
   /**
-   * List all users (paginated).
+   * List all users (paginated) with optional search and role filter.
    */
   static async listUsers(
     page: number = 1,
     limit: number = 10,
-    search?: string
+    search?: string,
+    role?: UserRole
   ) {
     const filter: Record<string, unknown> = {};
 
@@ -63,6 +64,10 @@ export class AdminService {
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
       ];
+    }
+
+    if (role) {
+      filter.role = role;
     }
 
     const { users, total } = await UserRepository.findAll(
@@ -84,6 +89,55 @@ export class AdminService {
         hasPrevPage: page > 1,
       },
     };
+  }
+
+  /**
+   * Promote or demote a user's role.
+   *
+   * Safety rules:
+   * - Admin cannot change their own role
+   * - If demoting an admin → ensure at least 1 other admin remains
+   */
+  static async updateUserRole(
+    targetUserId: string,
+    newRole: UserRole,
+    requestingAdminId: string
+  ): Promise<IUser | null> {
+    // Rule: Admin cannot change their own role via this endpoint
+    if (targetUserId === requestingAdminId) {
+      throw new Error(
+        "Cannot change your own role. Ask another admin to do this."
+      );
+    }
+
+    // Fetch target user
+    const targetUser = await UserRepository.findById(targetUserId);
+    if (!targetUser) return null;
+
+    // Rule: If demoting an admin, ensure we're not removing the last one
+    if (
+      targetUser.role === UserRole.ADMIN &&
+      newRole === UserRole.STUDENT
+    ) {
+      const adminCount = await UserRepository.count({ role: UserRole.ADMIN });
+      if (adminCount <= 1) {
+        throw new Error(
+          "Cannot demote the only admin. Promote another user to admin first."
+        );
+      }
+    }
+
+    // No-op if role is already the same
+    if (targetUser.role === newRole) {
+      return targetUser;
+    }
+
+    // Update the role
+    const updatedUser = await UserRepository.updateById(targetUserId, {
+      role: newRole,
+    });
+
+    return updatedUser;
   }
 
   /**

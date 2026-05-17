@@ -60,6 +60,30 @@ export const changePasswordSchema = z.object({
 });
 
 /**
+ * Update profile schema — for authenticated users.
+ */
+export const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must not exceed 100 characters")
+    .optional()
+    .or(z.literal("")),
+  email: emailSchema.optional().or(z.literal("")),
+  phone: phoneSchema.optional().or(z.literal("")),
+  bio: z.string().max(500).optional().or(z.literal("")),
+  dob: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().date())
+    .optional()
+    .or(z.literal("")),
+  gender: z.nativeEnum(Gender).optional().or(z.literal("")),
+  emergencyContact: z.string().max(200).optional().or(z.literal("")),
+  healthConditions: z.string().max(500).optional().or(z.literal("")),
+});
+
+/**
  * Forgot password schema — request a reset token.
  */
 export const forgotPasswordSchema = z.object({
@@ -78,5 +102,6 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CompleteProfileInput = z.infer<typeof completeProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

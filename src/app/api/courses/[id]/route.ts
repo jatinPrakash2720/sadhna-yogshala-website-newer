@@ -14,17 +14,22 @@ import { updateCourseSchema } from "@/validations/course.validation";
 import { CourseService } from "@/services/course.service";
 
 /**
- * GET /api/courses/:id — Get a single course by ID.
+ * GET /api/courses/:id — Get a single course by ID or Slug.
  */
 export const GET = asyncHandler(
   async (_req: NextRequest, context?: { params: Promise<Record<string, string>> }) => {
     const { id } = await context!.params;
 
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return sendBadRequest("Invalid course ID format");
+    let course;
+    
+    // Check if the provided 'id' is a MongoDB ObjectId
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      course = await CourseService.getById(id);
+    } else {
+      // Otherwise treat it as a slug
+      course = await CourseService.getBySlug(id);
     }
 
-    const course = await CourseService.getById(id);
     if (!course) {
       return sendNotFound("Course not found");
     }

@@ -4,6 +4,7 @@
  */
 
 import { CourseRepository } from "@/repositories/course.repository";
+import { deleteMedia, deleteMultipleMedia } from "@/utils/media";
 import type { ICourse } from "@/types";
 import type {
   CreateCourseInput,
@@ -33,6 +34,13 @@ export class CourseService {
   }
 
   /**
+   * Get a single course by slug.
+   */
+  static async getBySlug(slug: string): Promise<ICourse | null> {
+    return CourseRepository.findBySlug(slug);
+  }
+
+  /**
    * Update a course by ID.
    */
   static async update(
@@ -47,10 +55,41 @@ export class CourseService {
   }
 
   /**
-   * Delete a course by ID.
+   * Delete a course by ID, cleaning up all Cloudinary media first.
    */
   static async delete(id: string): Promise<ICourse | null> {
+    const course = await CourseRepository.findById(id);
+    if (!course) return null;
+
+    // Clean up all Cloudinary assets before deleting the document
+    await CourseService.deleteAllCourseMedia(course);
+
     return CourseRepository.deleteById(id);
+  }
+
+  /**
+   * Delete all Cloudinary assets attached to a course.
+   * Uses allSettled so partial failures don't abort the deletion.
+   */
+  static async deleteAllCourseMedia(course: ICourse): Promise<void> {
+    const deletions: Promise<void>[] = [];
+
+    if (course.thumbnail?.public_id) {
+      deletions.push(deleteMedia(course.thumbnail.public_id, "image"));
+    }
+
+    if (course.gallery && course.gallery.length > 0) {
+      const galleryIds = course.gallery
+        .map((g) => g.public_id)
+        .filter(Boolean);
+      deletions.push(deleteMultipleMedia(galleryIds, "image"));
+    }
+
+    if (course.introVideo?.public_id) {
+      deletions.push(deleteMedia(course.introVideo.public_id, "video"));
+    }
+
+    await Promise.allSettled(deletions);
   }
 
   /**
@@ -60,7 +99,6 @@ export class CourseService {
     const page = query.page || PAGINATION.DEFAULT_PAGE;
     const limit = query.limit || PAGINATION.DEFAULT_LIMIT;
 
-    // Build filter
     const filter: mongoose.QueryFilter<ICourse> = {};
 
     if (query.batchType) filter.batchType = query.batchType;
@@ -74,7 +112,6 @@ export class CourseService {
       if (query.maxPrice !== undefined) filter.price.$lte = query.maxPrice;
     }
 
-    // Build sort
     const sortBy = query.sortBy || "createdAt";
     const sortOrder = query.sortOrder === "asc" ? 1 : -1;
     const sort = { [sortBy]: sortOrder } as Record<string, 1 | -1>;

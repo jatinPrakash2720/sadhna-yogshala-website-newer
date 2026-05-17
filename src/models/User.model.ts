@@ -49,6 +49,11 @@ const userSchema = new Schema<IUser>(
     image: {
       type: String,
     },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: [500, "Bio must not exceed 500 characters"],
+    },
     isVerified: {
       type: Boolean,
       default: false,
@@ -113,19 +118,7 @@ const userSchema = new Schema<IUser>(
 );
 
 // ─── Indexes ─────────────────────────────────────────────
-userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1, status: 1 });
-
-// ─── Pre-save: Hash password ─────────────────────────────
-userSchema.pre("save", async function () {
-  // Only hash if password is modified (or new)
-  if (!this.isModified("password") || !this.password) {
-    return;
-  }
-
-  const salt = await bcrypt.genSalt(AUTH.SALT_ROUNDS);
-  this.password = await bcrypt.hash(this.password, salt);
-});
 
 // ─── Schema Method: Compare password ─────────────────────
 userSchema.methods.comparePassword = async function (

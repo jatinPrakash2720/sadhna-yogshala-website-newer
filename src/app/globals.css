@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #409072;
+    --color-sage: #84948e;
+    --color-cream: #f8f6f2;
+    --color-earth: #948d7c;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-outfit);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+  
+  .card {
+    @apply bg-white rounded-3xl border border-cream-200 shadow-card hover:shadow-card-hover transition-shadow duration-300;
+  }
+
+  .input-label {
+    @apply block text-sm font-semibold text-gray-900 mb-1.5;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-cream-300 bg-white px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 placeholder:text-sage-300 text-gray-900;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-cream-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-sage-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
+  }
+}
+
+body {
+  background-color: var(--color-cream);
+  color: #111827;
+}
+
+/* Hide scrollbars globally on all elements */
+::-webkit-scrollbar {
+  display: none !important;
+}
+
+* {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}

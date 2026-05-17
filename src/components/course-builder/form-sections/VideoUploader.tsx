@@ -1,0 +1,257 @@
+"use client";
+
+/**
+ * Video Uploader — intro video upload with player preview and progress
+ */
+
+import { useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Upload, X, Play, Video, AlertCircle, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useCourseBuilderStore } from "@/store/courseBuilderStore";
+import { useMediaUpload, validateVideoFile, formatFileSize } from "@/hooks/useMediaUpload";
+
+export default function VideoUploader() {
+  const { courseId, videoPreview, setVideoPreview } = useCourseBuilderStore();
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const { isUploading, progress, error, upload, reset } = useMediaUpload({
+    courseId,
+    mediaType: "introVideo",
+    onSuccess: (data: any) => {
+      const video = data?.introVideo || data?.data?.course?.introVideo;
+      if (video?.url) {
+        setVideoPreview({ 
+          url: video.url, 
+          public_id: video.public_id,
+          thumbnail: video.thumbnail,
+          duration: video.duration,
+          isLocal: false 
+        });
+      }
+    },
+  });
+
+  const handleFile = useCallback((file: File) => {
+    const err = validateVideoFile(file);
+    if (err) { alert(err); return; }
+    setLocalFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setVideoPreview({ url: localUrl, public_id: "", isLocal: true });
+    setIsPlaying(false);
+  }, [setVideoPreview]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    },
+    [handleFile]
+  );
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleRemove = () => {
+    setVideoPreview(null);
+    setLocalFile(null);
+    setIsPlaying(false);
+    reset();
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <AnimatePresence mode="wait">
+        {!videoPreview ? (
+          <motion.div
+            key="dropzone"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            className={cn(
+              "relative flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200 aspect-video",
+              isDragOver
+                ? "border-brand-500 bg-brand-50 scale-[1.01]"
+                : "border-cream-300 bg-cream-50 hover:border-brand-400 hover:bg-brand-50/50"
+            )}
+          >
+            <motion.div
+              animate={{ y: isDragOver ? -4 : 0 }}
+              className="flex flex-col items-center gap-2 text-center px-6"
+            >
+              <div className={cn(
+                "h-14 w-14 rounded-2xl flex items-center justify-center transition-colors",
+                isDragOver ? "bg-brand-100" : "bg-cream-200"
+              )}>
+                <Video className={cn("h-7 w-7 transition-colors", isDragOver ? "text-brand-600" : "text-sage-400")} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-700">
+                  {isDragOver ? "Drop video here" : "Drag & drop intro video"}
+                </p>
+                <p className="text-xs text-sage-400 mt-1">
+                  or <span className="text-brand-600 font-medium">browse files</span>
+                </p>
+                <p className="text-[10px] text-sage-300 mt-2">MP4, MOV, WebM, AVI — max 500 MB</p>
+              </div>
+            </motion.div>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+              onChange={handleChange}
+              className="hidden"
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="preview"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative rounded-2xl overflow-hidden aspect-video bg-gray-900 group"
+          >
+            <video
+              ref={videoRef}
+              src={videoPreview.url}
+              className="w-full h-full object-cover"
+              onEnded={() => setIsPlaying(false)}
+            />
+            {/* Play/pause overlay */}
+            <div
+              className="absolute inset-0 flex items-center justify-center cursor-pointer"
+              onClick={togglePlay}
+            >
+              {!isPlaying && (
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="h-14 w-14 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center"
+                >
+                  <Play className="h-6 w-6 text-white fill-white ml-1" />
+                </motion.div>
+              )}
+            </div>
+            {/* Action buttons */}
+            <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-white"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Replace
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+                className="flex items-center gap-1.5 bg-red-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-600"
+              >
+                <X className="h-3 w-3" />
+                Remove
+              </button>
+            </div>
+            {/* Status badge */}
+            <div className={cn(
+              "absolute top-3 left-3 text-white text-[10px] font-bold px-2 py-0.5 rounded-md",
+              videoPreview.isLocal ? "bg-amber-500" : "bg-green-500"
+            )}>
+              {videoPreview.isLocal ? "Not uploaded yet" : "✓ Uploaded"}
+            </div>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+              onChange={handleChange}
+              className="hidden"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* File info + upload button */}
+      {localFile && videoPreview?.isLocal && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between bg-cream-50 border border-cream-200 rounded-xl px-4 py-3"
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-gray-700 truncate">{localFile.name}</p>
+            <p className="text-[10px] text-sage-400">{formatFileSize(localFile.size)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => upload(localFile)}
+            disabled={isUploading}
+            className={cn(
+              "flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg transition-all ml-3 flex-shrink-0",
+              isUploading
+                ? "bg-cream-200 text-sage-400 cursor-not-allowed"
+                : "bg-brand-600 text-white hover:bg-brand-700"
+            )}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {isUploading ? "Uploading..." : "Upload"}
+          </button>
+        </motion.div>
+      )}
+
+      {/* Progress */}
+      {isUploading && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-1">
+          <div className="flex justify-between text-xs text-sage-500">
+            <span>Uploading video to Cloudinary...</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-1.5 bg-cream-200 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-brand-500 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ ease: "linear" }}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5"
+        >
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </motion.div>
+      )}
+
+      <p className="text-[11px] text-sage-400">
+        💡 A short 1-3 minute intro video significantly increases enrollment rates.
+      </p>
+    </div>
+  );
+}

@@ -41,6 +41,22 @@ export enum BatchType {
 export enum MeetingPlatform {
   ZOOM = "zoom",
   GOOGLE_MEET = "google-meet",
+  TEAMS = "teams",
+  OTHER = "other",
+}
+
+// ─── Workshop Mode ───────────────────────────────────────
+export enum WorkshopMode {
+  ONLINE = "online",
+  OFFLINE = "offline",
+  HYBRID = "hybrid",
+}
+
+// ─── Workshop Enrollment Status ─────────────────────────
+export enum WorkshopEnrollmentStatus {
+  ENROLLED = "enrolled",
+  WAITLISTED = "waitlisted",
+  CANCELLED = "cancelled",
 }
 
 // ─── Payment Status ──────────────────────────────────────

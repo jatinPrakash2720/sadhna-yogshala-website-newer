@@ -43,6 +43,14 @@ export class UserRepository {
   }
 
   /**
+   * Find a user by phone number.
+   */
+  static async findByPhone(phone: string): Promise<IUser | null> {
+    await this.connect();
+    return User.findOne({ phone }).lean<IUser>();
+  }
+
+  /**
    * Create a new user.
    */
   static async create(data: Partial<IUser>): Promise<IUser> {
@@ -60,7 +68,7 @@ export class UserRepository {
   ): Promise<IUser | null> {
     await this.connect();
     return User.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     }).lean<IUser>();
   }

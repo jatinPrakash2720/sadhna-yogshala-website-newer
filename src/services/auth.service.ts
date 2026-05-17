@@ -13,6 +13,7 @@ import type {
   RegisterInput,
   CompleteProfileInput,
   ChangePasswordInput,
+  UpdateProfileInput,
 } from "@/validations/auth.validation";
 import crypto from "crypto";
 
@@ -22,9 +23,15 @@ export class AuthService {
    */
   static async register(data: RegisterInput): Promise<IUser> {
     // Check if email already exists
-    const existing = await UserRepository.findByEmail(data.email);
-    if (existing) {
+    const existingEmail = await UserRepository.findByEmail(data.email);
+    if (existingEmail) {
       throw new Error("An account with this email already exists");
+    }
+
+    // Check if phone already exists
+    const existingPhone = await UserRepository.findByPhone(data.phone);
+    if (existingPhone) {
+      throw new Error("An account with this mobile number already exists");
     }
 
     // Hash password before creation
@@ -74,6 +81,50 @@ export class AuthService {
     });
 
     return updatedUser;
+  }
+
+  /**
+   * Update user profile (name, phone, bio, dob, gender, etc).
+   */
+  static async updateProfile(
+    userId: string,
+    data: UpdateProfileInput
+  ): Promise<IUser | null> {
+    const updateData: any = {};
+
+    if (data.name) updateData.name = data.name;
+    if (data.phone) updateData.phone = data.phone;
+    if (data.bio !== undefined) updateData.bio = data.bio;
+    if (data.dob && data.dob.trim()) updateData.dob = new Date(data.dob);
+    if (data.gender && data.gender.trim()) updateData.gender = data.gender;
+    if (data.emergencyContact !== undefined) updateData.emergencyContact = data.emergencyContact;
+    if (data.healthConditions !== undefined) updateData.healthConditions = data.healthConditions;
+
+    // Email update requires care (e.g., check for duplicates)
+    if (data.email && data.email.trim()) {
+      const existing = await UserRepository.findByEmail(data.email);
+      if (existing && existing._id.toString() !== userId) {
+        throw new Error("This email is already in use by another account");
+      }
+      updateData.email = data.email.toLowerCase().trim();
+    }
+
+    // Check if profile should be marked as completed
+    const user = await UserRepository.findById(userId);
+    if (user && !user.profileCompleted) {
+      const finalName = updateData.name || user.name;
+      const finalPhone = updateData.phone || user.phone;
+      const finalDob = updateData.dob || user.dob;
+      const finalGender = updateData.gender || user.gender;
+
+      if (finalName && finalPhone && finalDob && finalGender) {
+        updateData.profileCompleted = true;
+      }
+    }
+
+    // Perform update
+    const updated = await UserRepository.updateById(userId, { $set: updateData });
+    return updated;
   }
 
   /**

@@ -22,30 +22,15 @@ export function asyncHandler(handler: RouteHandler): (req: NextRequest, context?
       console.error(`[API Error] ${req.method} ${req.nextUrl.pathname}:`, error);
 
       if (error instanceof Error) {
-        // Mongoose validation error
+        // ... (existing Mongoose handlers)
         if (error.name === "ValidationError") {
-          return sendError(
-            "Validation failed",
-            HTTP_STATUS.BAD_REQUEST,
-            [error.message]
-          );
+          return sendError("Validation failed", HTTP_STATUS.BAD_REQUEST, [error.message]);
         }
-
-        // Mongoose duplicate key error
-        if (error.name === "MongoServerError" && (error as Error & { code?: number }).code === 11000) {
-          return sendError(
-            "Duplicate entry found",
-            HTTP_STATUS.CONFLICT,
-            [error.message]
-          );
+        if (error.name === "MongoServerError" && (error as any).code === 11000) {
+          return sendError("Duplicate entry found", HTTP_STATUS.CONFLICT, [error.message]);
         }
-
-        // Mongoose cast error (invalid ObjectId)
         if (error.name === "CastError") {
-          return sendError(
-            "Invalid ID format",
-            HTTP_STATUS.BAD_REQUEST
-          );
+          return sendError("Invalid ID format", HTTP_STATUS.BAD_REQUEST);
         }
 
         return sendError(
@@ -54,9 +39,13 @@ export function asyncHandler(handler: RouteHandler): (req: NextRequest, context?
         );
       }
 
+      // Handle plain object errors (common in some SDKs like Razorpay)
+      const errorObj = error as any;
+      const message = errorObj.description || errorObj.message || errorObj.error?.description || "An unexpected error occurred";
+      
       return sendError(
-        "An unexpected error occurred",
-        HTTP_STATUS.INTERNAL_SERVER_ERROR
+        message,
+        errorObj.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
       );
     }
   };

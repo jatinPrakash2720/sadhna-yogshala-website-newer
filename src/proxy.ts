@@ -9,12 +9,34 @@
  * - No heavy business logic here
  */
 
-import { auth } from "@/config/auth";
+import { edgeAuth } from "@/config/auth.config";
 import { NextResponse } from "next/server";
 
-export default auth((req) => {
+export default edgeAuth((req) => {
   const { pathname } = req.nextUrl;
   const isAuthenticated = !!req.auth;
+  const role = (req.auth?.user as Record<string, unknown>)?.role;
+
+  // ─── Protected Frontend Routes ─────────────────────────
+  const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isAdminRoute = pathname.startsWith("/admin") && !pathname.startsWith("/api/admin");
+
+  if ((isDashboardRoute || isAdminRoute) && !isAuthenticated) {
+    return NextResponse.redirect(new URL("/login", req.nextUrl));
+  }
+
+  // ─── Role-Based Redirection ─────────────────────────────
+  if (isAuthenticated) {
+    // If Admin goes to Student Dashboard -> Redirect to Admin Panel
+    if (isDashboardRoute && role === "admin") {
+      return NextResponse.redirect(new URL("/admin", req.nextUrl));
+    }
+
+    // If Student goes to Admin Panel -> Redirect to Student Dashboard
+    if (isAdminRoute && role !== "admin") {
+      return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    }
+  }
 
   // ─── Protected API routes (require authentication) ─────
   const protectedPatterns = [
@@ -26,7 +48,6 @@ export default auth((req) => {
     /^\/api\/auth\/logout/,
   ];
 
-  // Check if the route requires authentication
   const isProtectedRoute = protectedPatterns.some((pattern) =>
     pattern.test(pathname)
   );
@@ -41,9 +62,8 @@ export default auth((req) => {
     );
   }
 
-  // ─── Admin-only routes ─────────────────────────────────
+  // ─── Admin-only API routes ─────────────────────────────
   if (pathname.startsWith("/api/admin") && isAuthenticated) {
-    const role = (req.auth?.user as Record<string, unknown>)?.role;
     if (role !== "admin") {
       return NextResponse.json(
         {
@@ -63,6 +83,10 @@ export default auth((req) => {
  */
 export const config = {
   matcher: [
+    // Frontend Routes
+    "/dashboard/:path*",
+    "/admin/:path*",
+    // API Routes
     "/api/enrollments/:path*",
     "/api/admin/:path*",
     "/api/auth/me",

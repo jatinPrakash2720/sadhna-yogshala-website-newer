@@ -12,6 +12,8 @@ if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
 /**
  * Razorpay SDK instance — reused across API routes.
  */
+console.log(`[Razorpay] Initializing with Key ID: ${process.env.RAZORPAY_KEY_ID?.substring(0, 8)}...`);
+
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,

@@ -13,6 +13,8 @@ import {
   MeetingPlatform,
   PaymentStatus,
   ClassStatus,
+  WorkshopMode,
+  WorkshopEnrollmentStatus,
 } from "@/constants";
 
 // ─── Base Document Interface ─────────────────────────────
@@ -31,6 +33,7 @@ export interface IUser extends IBaseDocument {
   role: UserRole;
   authProvider: AuthProvider;
   image?: string;
+  bio?: string;
   isVerified: boolean;
   profileCompleted: boolean;
   purchasedCourses: Types.ObjectId[];
@@ -46,21 +49,160 @@ export interface IUser extends IBaseDocument {
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
+// ─── Media Assets ───────────────────────────────────────
+export interface IMediaAsset {
+  url: string;
+  public_id: string;
+}
+
+export interface IVideoAsset {
+  url: string;
+  public_id: string;
+  thumbnail: string;
+  duration: number;
+}
+
+// ─── Instructor ─────────────────────────────────────────
+export interface IInstructor {
+  name: string;
+  title?: string;
+  bio?: string;
+  image?: IMediaAsset;
+}
+
+// ─── Curriculum ──────────────────────────────────────────
+export interface ICurriculumLesson {
+  _id?: Types.ObjectId | string;
+  title: string;
+  duration: number; // minutes
+  isPreview: boolean;
+}
+
+export interface ICurriculumSection {
+  _id?: Types.ObjectId | string;
+  sectionTitle: string;
+  lessons: ICurriculumLesson[];
+}
+
+// ─── SEO ─────────────────────────────────────────────────
+export interface ISEOSettings {
+  metaTitle?: string;
+  metaDescription?: string;
+  slug?: string;
+  keywords?: string[];
+}
+
 // ─── Course ──────────────────────────────────────────────
 export interface ICourse extends IBaseDocument {
+  // Core info
   title: string;
   slug: string;
+  shortDescription?: string;
   description: string;
-  thumbnail?: string;
+  category?: string;
+  tags?: string[];
+  level?: string;
+  language?: string;
+
+  // Media
+  thumbnail?: IMediaAsset;
+  gallery?: IMediaAsset[];
+  introVideo?: IVideoAsset;
+
+  // Instructor
+  instructor?: IInstructor;
+  instructorName?: string; // legacy field
+
+  // Pricing & batch
   price: number;
+  discountPrice?: number;
   durationInMonths: number;
   batchType: BatchType;
   startDate: Date;
   endDate: Date;
   totalClasses: number;
-  instructorName: string;
   meetingPlatform: MeetingPlatform;
+
+  // Curriculum
+  curriculum?: ICurriculumSection[];
+
+  // SEO
+  seo?: ISEOSettings;
+
+  // Publishing
   isPublished: boolean;
+}
+
+// ─── Workshop ────────────────────────────────────────────
+export interface IWorkshopTimelineItem {
+  _id?: Types.ObjectId | string;
+  time: string;
+  title: string;
+  description?: string;
+}
+
+export interface IWorkshopLocation {
+  venueName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  googleMapsLink?: string;
+}
+
+export interface IWorkshop extends IBaseDocument {
+  title: string;
+  shortDescription: string;
+  fullDescription: string;
+  slug: string;
+  category: string;
+  tags: string[];
+  thumbnail?: IMediaAsset;
+  galleryImages: IMediaAsset[];
+  introVideo?: IVideoAsset;
+  price: number;
+  discountPrice?: number;
+  startDate: Date;
+  endDate: Date;
+  startTime: string;
+  endTime: string;
+  durationInHours: number;
+  durationInDays: number;
+  mode: WorkshopMode;
+  venueName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  googleMapsLink?: string;
+  meetingPlatform?: MeetingPlatform | string;
+  meetingLink?: string;
+  maxParticipants: number;
+  currentParticipants: number;
+  waitlistEnabled: boolean;
+  instructor: string;
+  guestInstructor?: string;
+  speakerBio: string;
+  benefits: string[];
+  requirements: string[];
+  timeline: IWorkshopTimelineItem[];
+  isPublished: boolean;
+}
+
+export interface IWorkshopEnrollment extends IBaseDocument {
+  student: Types.ObjectId;
+  workshop: Types.ObjectId;
+  status: WorkshopEnrollmentStatus;
+  paymentStatus: PaymentStatus;
+  enrolledAt: Date;
+}
+
+export interface IWorkshopAttendance extends IBaseDocument {
+  student: Types.ObjectId;
+  workshop: Types.ObjectId;
+  attended: boolean;
+  checkedInAt?: Date;
+  notes?: string;
 }
 
 // ─── Enrollment ──────────────────────────────────────────
@@ -179,7 +321,6 @@ export interface ChangePasswordRequest {
 export interface CreateCourseRequest {
   title: string;
   description: string;
-  thumbnail?: string;
   price: number;
   durationInMonths: number;
   batchType: BatchType;
@@ -231,4 +372,107 @@ export interface DashboardStats {
   totalRevenue: number;
   activeStudents: number;
   recentPayments: IPayment[];
+}
+
+// ─── Course Builder Form Types ───────────────────────────
+export interface CourseFormLesson {
+  id: string;
+  title: string;
+  duration: number;
+  isPreview: boolean;
+}
+
+export interface CourseFormSection {
+  id: string;
+  sectionTitle: string;
+  lessons: CourseFormLesson[];
+}
+
+export interface CourseFormData {
+  // Basic info
+  title: string;
+  shortDescription: string;
+  description: string;
+  category: string;
+  tags: string[];
+  level: string;
+  language: string;
+
+  // Pricing & batch
+  price: number;
+  discountPrice?: number;
+  durationInMonths: number;
+  totalClasses: number;
+  batchType: string;
+  meetingPlatform: string;
+  startDate: string;
+  endDate: string;
+
+  // Instructor
+  instructorName: string;
+  instructorTitle: string;
+  instructorBio: string;
+
+  // Media (Assets from Cloudinary)
+  thumbnail?: IMediaAsset;
+  introVideo?: IVideoAsset;
+  gallery?: IMediaAsset[];
+
+  // Curriculum
+  curriculum: CourseFormSection[];
+
+  // SEO
+  metaTitle: string;
+  metaDescription: string;
+  seoSlug: string;
+  keywords: string[];
+
+  // Publishing
+  isPublished: boolean;
+}
+
+// ─── Workshop Builder Form Types ─────────────────────────
+export interface WorkshopFormTimelineItem {
+  id: string;
+  time: string;
+  title: string;
+  description: string;
+}
+
+export interface WorkshopFormData {
+  title: string;
+  shortDescription: string;
+  fullDescription: string;
+  slug: string;
+  category: string;
+  tags: string[];
+  thumbnail?: IMediaAsset;
+  introVideo?: IVideoAsset;
+  galleryImages?: IMediaAsset[];
+  price: number;
+  discountPrice?: number;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  durationInHours: number;
+  durationInDays: number;
+  mode: string;
+  venueName: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  googleMapsLink: string;
+  meetingPlatform: string;
+  meetingLink: string;
+  maxParticipants: number;
+  waitlistEnabled: boolean;
+  instructor: string;
+  guestInstructor: string;
+  speakerBio: string;
+  benefits: string[];
+  requirements: string[];
+  timeline: WorkshopFormTimelineItem[];
+  isPublished: boolean;
 }

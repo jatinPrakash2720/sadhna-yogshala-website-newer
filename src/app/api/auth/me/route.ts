@@ -9,6 +9,8 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { withAuth } from "@/middleware/withAuth";
 import { AuthService } from "@/services/auth.service";
 
+export const revalidate = 0;
+
 export const GET = asyncHandler(
   withAuth(async (_req: NextRequest, { user }) => {
     const profile = await AuthService.getProfile(user.id);

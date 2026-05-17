@@ -4,6 +4,7 @@
  * This file is imported by both auth.ts and proxy.ts (Edge runtime).
  */
 
+import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
@@ -84,5 +85,7 @@ export const authConfig: NextAuthConfig = {
     },
   },
 };
+
+export const { auth: edgeAuth } = NextAuth(authConfig);
 
 export default authConfig;

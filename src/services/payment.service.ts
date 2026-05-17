@@ -51,10 +51,15 @@ export class PaymentService {
     }
 
     // 4. Create Razorpay order
+    const amountInPaise = Math.round(course.price * 100);
+    if (amountInPaise < 100) {
+      throw new Error("Amount must be at least 100 paise");
+    }
+
     const orderOptions = {
-      amount: Math.round(course.price * 100), // Amount in paise
+      amount: amountInPaise, // Amount in paise
       currency: DEFAULT_CURRENCY,
-      receipt: `rcpt_${userId}_${courseId}_${Date.now()}`,
+      receipt: `rcpt_${Date.now()}_${userId.toString().slice(-6)}`,
       notes: {
         userId,
         courseId,

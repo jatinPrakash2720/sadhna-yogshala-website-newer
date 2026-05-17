@@ -7,11 +7,11 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/config/database";
 import User from "@/models/User.model";
 import { UserRole, AuthProvider } from "@/constants";
 import { authConfig } from "@/config/auth.config";
+import { comparePassword } from "@/utils/password";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -52,7 +52,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Please login with Google or set a password first");
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await comparePassword(password, user.password);
+
         if (!isPasswordValid) {
           throw new Error("Invalid email or password");
         }

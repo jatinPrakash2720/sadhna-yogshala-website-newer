@@ -60,7 +60,6 @@ const paymentSchema = new Schema<IPayment>(
 );
 
 // ─── Indexes ─────────────────────────────────────────────
-paymentSchema.index({ razorpayOrderId: 1 }, { unique: true });
 paymentSchema.index({ user: 1, createdAt: -1 });
 paymentSchema.index({ paymentStatus: 1 });
 
