@@ -12,17 +12,37 @@ const requiredVars = [
   "CLOUDINARY_API_SECRET",
 ] as const;
 
-for (const varName of requiredVars) {
-  if (!process.env[varName]) {
-    throw new Error(`Missing required environment variable: ${varName}`);
+let isConfigured = false;
+
+function ensureConfigured() {
+  if (isConfigured) return;
+
+  for (const varName of requiredVars) {
+    if (!process.env[varName]) {
+      throw new Error(`Missing required environment variable: ${varName}`);
+    }
   }
+
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true, // Always use HTTPS URLs
+  });
+
+  isConfigured = true;
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true, // Always use HTTPS URLs
+// Export a proxy that configures Cloudinary lazily upon accessing any property or method
+const cloudinaryProxy = new Proxy(cloudinary, {
+  get(target, prop) {
+    ensureConfigured();
+    const value = Reflect.get(target, prop);
+    if (typeof value === "function") {
+      return value.bind(target);
+    }
+    return value;
+  },
 });
 
-export default cloudinary;
+export default cloudinaryProxy;

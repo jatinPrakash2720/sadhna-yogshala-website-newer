@@ -5,18 +5,38 @@
 
 import Razorpay from "razorpay";
 
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-  throw new Error("Please define RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.local");
+let instance: Razorpay | null = null;
+
+function getRazorpayInstance(): Razorpay {
+  if (!instance) {
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!key_id || !key_secret) {
+      throw new Error("Please define RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.local");
+    }
+
+    console.log(`[Razorpay] Initializing with Key ID: ${key_id.substring(0, 8)}...`);
+    instance = new Razorpay({
+      key_id,
+      key_secret,
+    });
+  }
+  return instance;
 }
 
 /**
- * Razorpay SDK instance — reused across API routes.
+ * Razorpay SDK instance — lazily initialized and reused across API routes.
  */
-console.log(`[Razorpay] Initializing with Key ID: ${process.env.RAZORPAY_KEY_ID?.substring(0, 8)}...`);
-
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+const razorpayProxy = new Proxy({} as Razorpay, {
+  get(_target, prop) {
+    const targetInstance = getRazorpayInstance();
+    const value = Reflect.get(targetInstance, prop);
+    if (typeof value === "function") {
+      return value.bind(targetInstance);
+    }
+    return value;
+  },
 });
 
-export default razorpay;
+export default razorpayProxy;

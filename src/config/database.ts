@@ -5,12 +5,6 @@
 
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable in .env.local");
-}
-
 /**
  * Global cache to prevent multiple connections during hot-reload in development.
  * In production, this is not an issue as the module is loaded once.
@@ -37,6 +31,12 @@ if (!global.mongooseCache) {
  * Reuses existing connection if available, otherwise creates a new one.
  */
 export async function connectToDatabase(): Promise<typeof mongoose> {
+  const MONGODB_URI = process.env.MONGODB_URI;
+
+  if (!MONGODB_URI) {
+    throw new Error("Please define the MONGODB_URI environment variable in .env.local");
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
@@ -49,7 +49,7 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
       socketTimeoutMS: 45000,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
       console.log("✅ MongoDB connected successfully");
       return mongooseInstance;
     });

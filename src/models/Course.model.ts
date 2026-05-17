@@ -211,7 +211,6 @@ const courseSchema = new Schema<ICourse>(
 );
 
 // ─── Indexes ─────────────────────────────────────────────
-courseSchema.index({ slug: 1 }, { unique: true });
 courseSchema.index({ isPublished: 1, batchType: 1 });
 courseSchema.index({ title: "text", description: "text" }); // Text search index
 courseSchema.index({ category: 1 });
