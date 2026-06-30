@@ -91,8 +91,8 @@ export default function AdminOverviewPage() {
             <h2 className="text-lg font-bold text-gray-900">Revenue Overview</h2>
             <p className="text-sm text-sage-500">Monthly revenue for the current year</p>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -143,8 +143,8 @@ export default function AdminOverviewPage() {
             <h2 className="text-lg font-bold text-gray-900">Top Courses</h2>
             <p className="text-sm text-sage-500">By active enrollments</p>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={enrollmentsData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
                 <XAxis type="number" hide />

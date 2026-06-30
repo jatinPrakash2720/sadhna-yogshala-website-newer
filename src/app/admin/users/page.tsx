@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, Filter, MoreVertical, Shield, ShieldOff, Ban, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { formatDate } from "@/lib/utils";
 
 // Mock Data
 const MOCK_USERS = [
@@ -105,7 +106,7 @@ export default function AdminUsersPage() {
                     <span className="font-medium text-gray-900">{user.enrollments}</span>
                   </td>
                   <td className="px-6 py-4 text-sage-500">
-                    {new Date(user.joinedAt).toLocaleDateString()}
+                    {formatDate(user.joinedAt)}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button className="text-sage-400 hover:text-brand-600 transition-colors p-1 rounded-md hover:bg-brand-50">

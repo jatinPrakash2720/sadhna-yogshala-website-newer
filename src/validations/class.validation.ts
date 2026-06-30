@@ -16,7 +16,6 @@ export const createClassSchema = z.object({
     .min(3, "Title must be at least 3 characters")
     .max(200, "Title must not exceed 200 characters")
     .trim(),
-  meetingLink: z.string().url("Must be a valid meeting URL").optional(),
   scheduledDate: z
     .string({ error: "Scheduled date is required" })
     .datetime({ offset: true })

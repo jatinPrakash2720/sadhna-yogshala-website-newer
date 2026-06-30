@@ -6,6 +6,13 @@
 import { z } from "zod";
 import { objectIdSchema } from "./common.validation";
 
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const idempotencyKeySchema = z
+  .string({ error: "Idempotency key is required" })
+  .regex(UUID_V4_REGEX, "Idempotency key must be a valid UUID v4");
+
 /**
  * Create Razorpay order schema.
  */

@@ -1,17 +1,16 @@
-"use client";
-import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
-import Logo from "@/components/ui/Logo";
-
+"use client"
+import Link from "next/link"
+import { useSession } from "next-auth/react"
+import { usePathname } from "next/navigation"
+import { useState } from "react"
+import Logo from "@/components/ui/Logo"
 
 export default function Header() {
-  const pathname = usePathname();
-  const { data: session, status } = useSession();
-  const isHomePage = pathname === "/";
-  const isWhiteBackgroundPage = !isHomePage;
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const pathname = usePathname()
+  const { data: session, status } = useSession()
+  const isHomePage = pathname === "/"
+  const isWhiteBackgroundPage = !isHomePage
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   return (
     <header
@@ -61,16 +60,6 @@ export default function Header() {
         >
           COURSES
         </Link>
-        <Link
-          href="/workshops"
-          className={`transition-colors ${
-            isWhiteBackgroundPage
-              ? "hover:text-sage-600"
-              : "hover:text-white/80"
-          }`}
-        >
-          WORKSHOPS
-        </Link>
 
         <Link
           href="/contact"
@@ -94,7 +83,8 @@ export default function Header() {
           CONTACT
         </Link>
         {status === "authenticated" ? (
-          ((session?.user as any)?.role === "admin" || (session?.user as any)?.isAdmin) ? (
+          (session?.user as any)?.role === "admin" ||
+          (session?.user as any)?.isAdmin ? (
             <Link
               href="/admin"
               className={`px-4 py-2 rounded-full font-medium text-sm transition-all ${
@@ -132,7 +122,8 @@ export default function Header() {
       </nav>
       <div className="flex items-center gap-3 lg:hidden">
         {status === "authenticated" ? (
-          ((session?.user as any)?.role === "admin" || (session?.user as any)?.isAdmin) ? (
+          (session?.user as any)?.role === "admin" ||
+          (session?.user as any)?.isAdmin ? (
             <Link
               href="/admin"
               className={`px-4 py-2 rounded-full font-medium text-sm transition-all ${
@@ -174,7 +165,9 @@ export default function Header() {
               ? "text-brand-900 bg-brand-100"
               : "text-white bg-brand-600/20 backdrop-blur-sm"
           } px-4 py-2 rounded-full font-medium ${
-            isWhiteBackgroundPage ? "hover:bg-brand-200" : "hover:bg-brand-600/30"
+            isWhiteBackgroundPage
+              ? "hover:bg-brand-200"
+              : "hover:bg-brand-600/30"
           } transition-all`}
         >
           {/* Hamburger icon */}
@@ -258,17 +251,6 @@ export default function Header() {
                 >
                   COURSES
                 </Link>
-                <Link
-                  href="/workshops"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={`text-lg font-medium py-3 px-4 rounded-lg transition-colors ${
-                    pathname === "/workshops"
-                      ? "bg-brand-600 text-white"
-                      : "text-brand-900 hover:bg-brand-100"
-                  }`}
-                >
-                  WORKSHOPS
-                </Link>
 
                 <Link
                   href="/contact"
@@ -293,7 +275,8 @@ export default function Header() {
                   CONTACT
                 </Link>
                 {status === "authenticated" ? (
-                  ((session?.user as any)?.role === "admin" || (session?.user as any)?.isAdmin) ? (
+                  (session?.user as any)?.role === "admin" ||
+                  (session?.user as any)?.isAdmin ? (
                     <Link
                       href="/admin"
                       onClick={() => setIsMenuOpen(false)}
@@ -325,5 +308,5 @@ export default function Header() {
         </>
       )}
     </header>
-  );
+  )
 }

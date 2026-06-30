@@ -5,27 +5,68 @@
  */
 
 import crypto from "crypto";
+import { randomUUID } from "crypto";
 import razorpay from "@/config/razorpay";
-import { PaymentRepository } from "@/repositories/payment.repository";
+import {
+  PaymentRepository,
+  isMongoDuplicateKeyError,
+} from "@/repositories/payment.repository";
 import { EnrollmentRepository } from "@/repositories/enrollment.repository";
 import { CourseRepository } from "@/repositories/course.repository";
 import { UserRepository } from "@/repositories/user.repository";
 import { NotificationRepository } from "@/repositories/notification.repository";
 import { AuthService } from "@/services/auth.service";
-import { PaymentStatus, DEFAULT_CURRENCY } from "@/constants";
-import type { IPayment } from "@/types";
+import { PaymentStatus, DEFAULT_CURRENCY, PAYMENT, CalendarSyncStatus } from "@/constants";
+import type { IPayment, IPaymentCheckoutPayload } from "@/types";
+
+export interface CreateOrderResult {
+  checkout: IPaymentCheckoutPayload & { paymentId: string; keyId: string };
+  payment: IPayment;
+  reused: boolean;
+}
 
 export class PaymentService {
+  private static buildCheckoutResponse(
+    payment: IPayment,
+    order?: { id: string; amount: number; currency: string }
+  ): IPaymentCheckoutPayload & { paymentId: string; keyId: string } {
+    const payload = payment.checkoutPayload;
+    const orderId = payload?.orderId ?? order?.id ?? payment.razorpayOrderId;
+    const amount = payload?.amount ?? order?.amount ?? payment.amount * 100;
+    const currency = payload?.currency ?? order?.currency ?? payment.currency;
+
+    if (!orderId) {
+      throw new Error("Checkout session is not ready yet");
+    }
+
+    return {
+      orderId,
+      amount,
+      currency,
+      paymentId: payment._id.toString(),
+      keyId: process.env.RAZORPAY_KEY_ID!,
+    };
+  }
+
+  private static getPaymentExpiry(): Date {
+    return new Date(Date.now() + PAYMENT.ORDER_EXPIRY_MINS * 60_000);
+  }
+
+  private static resolveCourseAmount(course: {
+    price: number;
+    discountPrice?: number;
+  }): number {
+    return course.discountPrice ?? course.price;
+  }
+
   /**
-   * Create a Razorpay order for a course purchase.
-   * Validates: course exists, user profile complete, not already enrolled.
+   * Layer 1 + 2 + 3: Create or reuse a Razorpay order for a course purchase.
    */
   static async createOrder(
     userId: string,
-    courseId: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<{ order: any; payment: IPayment }> {
-    // 1. Check profile completeness
+    courseId: string,
+    idempotencyKey: string
+  ): Promise<CreateOrderResult> {
     const isComplete = await AuthService.isProfileComplete(userId);
     if (!isComplete) {
       throw new Error(
@@ -33,7 +74,6 @@ export class PaymentService {
       );
     }
 
-    // 2. Find the course
     const course = await CourseRepository.findById(courseId);
     if (!course) {
       throw new Error("Course not found");
@@ -43,64 +83,207 @@ export class PaymentService {
       throw new Error("This course is not available for purchase");
     }
 
-    // 3. Check for duplicate enrollment
     const existingEnrollment =
       await EnrollmentRepository.findByStudentAndCourse(userId, courseId);
-    if (existingEnrollment && existingEnrollment.paymentStatus === PaymentStatus.PAID) {
+    if (
+      existingEnrollment &&
+      existingEnrollment.paymentStatus === PaymentStatus.PAID
+    ) {
       throw new Error("You are already enrolled in this course");
     }
 
-    // 4. Create Razorpay order
-    const amountInPaise = Math.round(course.price * 100);
+    const amount = this.resolveCourseAmount(course);
+    const amountInPaise = Math.round(amount * 100);
     if (amountInPaise < 100) {
       throw new Error("Amount must be at least 100 paise");
     }
 
-    const orderOptions = {
-      amount: amountInPaise, // Amount in paise
-      currency: DEFAULT_CURRENCY,
-      receipt: `rcpt_${Date.now()}_${userId.toString().slice(-6)}`,
-      notes: {
+    // Layer 1: replay cached response for the same idempotency key
+    const byKey = await PaymentRepository.findByIdempotencyKey(idempotencyKey);
+    if (byKey) {
+      if (byKey.user.toString() !== userId) {
+        throw new Error("Idempotency key belongs to another user");
+      }
+      if (byKey.course.toString() !== courseId) {
+        throw new Error("Idempotency key belongs to another course");
+      }
+      if (byKey.razorpayOrderId && byKey.checkoutPayload) {
+        return {
+          checkout: this.buildCheckoutResponse(byKey),
+          payment: byKey,
+          reused: true,
+        };
+      }
+    }
+
+    await PaymentRepository.expireStalePending(userId, courseId);
+
+    // Layer 2: reuse active pending checkout for same user+course
+    const activePending =
+      await PaymentRepository.findActivePendingByUserAndCourse(
         userId,
-        courseId,
-        courseName: course.title,
-      },
-    };
+        courseId
+      );
+    if (activePending?.razorpayOrderId && activePending.checkoutPayload) {
+      return {
+        checkout: this.buildCheckoutResponse(activePending),
+        payment: activePending,
+        reused: true,
+      };
+    }
 
-    const order = await razorpay.orders.create(orderOptions);
+    const internalOrderId = randomUUID();
+    const paymentExpiry = this.getPaymentExpiry();
 
-    // 5. Save payment record (pending)
-    const payment = await PaymentRepository.create({
-      user: userId as unknown as IPayment["user"],
-      course: courseId as unknown as IPayment["course"],
-      razorpayOrderId: order.id,
-      amount: course.price,
-      currency: DEFAULT_CURRENCY,
-      paymentStatus: PaymentStatus.PENDING,
+    let payment: IPayment;
+    try {
+      payment = await PaymentRepository.create({
+        user: userId as unknown as IPayment["user"],
+        course: courseId as unknown as IPayment["course"],
+        internalOrderId,
+        idempotencyKey,
+        amount,
+        currency: DEFAULT_CURRENCY,
+        paymentStatus: PaymentStatus.PENDING,
+        paymentExpiry,
+      });
+    } catch (error) {
+      if (!isMongoDuplicateKeyError(error)) {
+        throw error;
+      }
+
+      // Layer 3: race lost — return the winner's pending checkout
+      const winner =
+        (await PaymentRepository.findByIdempotencyKey(idempotencyKey)) ??
+        (await PaymentRepository.findActivePendingByUserAndCourse(
+          userId,
+          courseId
+        ));
+
+      if (winner?.razorpayOrderId && winner.checkoutPayload) {
+        return {
+          checkout: this.buildCheckoutResponse(winner),
+          payment: winner,
+          reused: true,
+        };
+      }
+
+      throw new Error(
+        "A checkout is already in progress. Please wait a moment and try again."
+      );
+    }
+
+    try {
+      const order = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: DEFAULT_CURRENCY,
+        receipt: internalOrderId,
+        notes: {
+          internalOrderId,
+          userId,
+          courseId,
+          courseName: course.title,
+        },
+      });
+
+      const checkoutPayload: IPaymentCheckoutPayload = {
+        orderId: order.id,
+        amount: Number(order.amount),
+        currency: order.currency,
+      };
+
+      const updatedPayment = await PaymentRepository.saveCheckoutPayload(
+        payment._id.toString(),
+        order.id,
+        checkoutPayload
+      );
+
+      if (!updatedPayment) {
+        throw new Error("Failed to save checkout session");
+      }
+
+      return {
+        checkout: this.buildCheckoutResponse(updatedPayment, {
+          id: order.id,
+          amount: Number(order.amount),
+          currency: order.currency,
+        }),
+        payment: updatedPayment,
+        reused: false,
+      };
+    } catch (error) {
+      await PaymentRepository.updateById(payment._id.toString(), {
+        paymentStatus: PaymentStatus.FAILED,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Grant course access after successful payment.
+   */
+  private static async fulfillEnrollment(
+    payment: IPayment,
+    notify: boolean
+  ): Promise<void> {
+    const userId = payment.user.toString();
+    const courseId = payment.course.toString();
+
+    const existingEnrollment =
+      await EnrollmentRepository.findByStudentAndCourse(userId, courseId);
+
+    if (!existingEnrollment) {
+      try {
+        await EnrollmentRepository.create({
+          student: payment.user,
+          course: payment.course,
+          paymentStatus: PaymentStatus.PAID,
+          calendarSyncStatus: CalendarSyncStatus.PENDING,
+          enrolledAt: new Date(),
+        });
+      } catch (error) {
+        if (!isMongoDuplicateKeyError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    await UserRepository.updateById(userId, {
+      $addToSet: { purchasedCourses: payment.course },
     });
 
-    return { order, payment };
+    if (notify) {
+      await NotificationRepository.create({
+        user: payment.user,
+        title: "Payment Successful",
+        message:
+          "Your payment has been verified and you are now enrolled in the course.",
+      });
+    }
   }
 
   /**
    * Verify Razorpay payment signature and create enrollment.
    */
   static async verifyPayment(
+    userId: string,
     razorpayOrderId: string,
     razorpayPaymentId: string,
     razorpaySignature: string
   ): Promise<IPayment> {
-    // 1. Find the pending payment
     const payment = await PaymentRepository.findByOrderId(razorpayOrderId);
     if (!payment) {
       throw new Error("Payment record not found");
     }
 
-    if (payment.paymentStatus === PaymentStatus.PAID) {
-      throw new Error("Payment already verified");
+    if (payment.user.toString() !== userId) {
+      throw new Error("Payment does not belong to this user");
     }
 
-    // 2. Verify signature
+    if (payment.paymentStatus === PaymentStatus.PAID) {
+      return payment;
+    }
+
     const body = razorpayOrderId + "|" + razorpayPaymentId;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
@@ -108,44 +291,25 @@ export class PaymentService {
       .digest("hex");
 
     if (expectedSignature !== razorpaySignature) {
-      // Mark as failed
       await PaymentRepository.updateByOrderId(razorpayOrderId, {
         paymentStatus: PaymentStatus.FAILED,
       });
       throw new Error("Payment verification failed: Invalid signature");
     }
 
-    // 3. Update payment record
-    const updatedPayment = await PaymentRepository.updateByOrderId(
-      razorpayOrderId,
-      {
+    const updatedPayment =
+      (await PaymentRepository.atomicMarkPaid(razorpayOrderId, userId, {
         razorpayPaymentId,
         razorpaySignature,
-        paymentStatus: PaymentStatus.PAID,
-      }
-    );
+      })) ??
+      (await PaymentRepository.findByOrderId(razorpayOrderId));
 
-    // 4. Create enrollment
-    await EnrollmentRepository.create({
-      student: payment.user,
-      course: payment.course,
-      paymentStatus: PaymentStatus.PAID,
-      enrolledAt: new Date(),
-    });
+    if (!updatedPayment || updatedPayment.paymentStatus !== PaymentStatus.PAID) {
+      throw new Error("Payment could not be confirmed");
+    }
 
-    // 5. Add course to user's purchasedCourses
-    await UserRepository.updateById(payment.user.toString(), {
-      $addToSet: { purchasedCourses: payment.course },
-    });
-
-    // 6. Send notification
-    await NotificationRepository.create({
-      user: payment.user,
-      title: "Payment Successful",
-      message: "Your payment has been verified and you are now enrolled in the course.",
-    });
-
-    return updatedPayment!;
+    await this.fulfillEnrollment(updatedPayment, true);
+    return updatedPayment;
   }
 
   /**
@@ -156,7 +320,6 @@ export class PaymentService {
     payload: string,
     signature: string
   ): Promise<void> {
-    // Verify webhook signature
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
       .update(payload)
@@ -170,48 +333,39 @@ export class PaymentService {
     const { event: eventType, payload: eventPayload } = event;
 
     if (eventType === "payment.captured") {
-      const { payment: { entity } } = eventPayload;
+      const {
+        payment: { entity },
+      } = eventPayload;
       const orderId = entity.order_id;
 
-      // Check if already processed (idempotency)
       const existingPayment = await PaymentRepository.findByOrderId(orderId);
-      if (existingPayment?.paymentStatus === PaymentStatus.PAID) {
-        return; // Already processed
+      if (!existingPayment) {
+        return;
       }
 
-      // Update payment
-      if (existingPayment) {
-        await PaymentRepository.updateByOrderId(orderId, {
-          razorpayPaymentId: entity.id,
-          paymentStatus: PaymentStatus.PAID,
-        });
+      if (existingPayment.paymentStatus === PaymentStatus.PAID) {
+        return;
+      }
 
-        // Create enrollment if not exists
-        const existingEnrollment =
-          await EnrollmentRepository.findByStudentAndCourse(
-            existingPayment.user.toString(),
-            existingPayment.course.toString()
-          );
+      await PaymentRepository.updateByOrderId(orderId, {
+        razorpayPaymentId: entity.id,
+        paymentStatus: PaymentStatus.PAID,
+      });
 
-        if (!existingEnrollment) {
-          await EnrollmentRepository.create({
-            student: existingPayment.user,
-            course: existingPayment.course,
-            paymentStatus: PaymentStatus.PAID,
-            enrolledAt: new Date(),
-          });
-
-          await UserRepository.updateById(
-            existingPayment.user.toString(),
-            {
-              $addToSet: { purchasedCourses: existingPayment.course },
-            }
-          );
-        }
+      const payment = await PaymentRepository.findByOrderId(orderId);
+      if (payment) {
+        await this.fulfillEnrollment(payment, false);
       }
     } else if (eventType === "payment.failed") {
-      const { payment: { entity } } = eventPayload;
+      const {
+        payment: { entity },
+      } = eventPayload;
       const orderId = entity.order_id;
+
+      const existingPayment = await PaymentRepository.findByOrderId(orderId);
+      if (existingPayment?.paymentStatus === PaymentStatus.PAID) {
+        return;
+      }
 
       await PaymentRepository.updateByOrderId(orderId, {
         paymentStatus: PaymentStatus.FAILED,

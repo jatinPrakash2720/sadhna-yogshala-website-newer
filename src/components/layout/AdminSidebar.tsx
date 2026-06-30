@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   BookOpen,
@@ -13,26 +13,26 @@ import {
   Shield,
   Menu,
   X,
-} from "lucide-react";
-import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
-import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
-import { cn } from "@/lib/utils";
-import Logo from "@/components/ui/Logo";
+} from "lucide-react"
+import { useState } from "react"
+import { signOut, useSession } from "next-auth/react"
+import { motion, AnimatePresence } from "framer-motion"
+import Image from "next/image"
+import { cn } from "@/lib/utils"
+import Logo from "@/components/ui/Logo"
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/courses", label: "Courses", icon: BookOpen },
-  { href: "/admin/workshops", label: "Workshops", icon: CalendarDays },
+  { href: "/admin/classes", label: "Live Classes", icon: CalendarDays },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
   { href: "/admin/settings", label: "Settings", icon: Settings },
-];
+]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const pathname = usePathname();
-  const { data: session } = useSession();
+  const pathname = usePathname()
+  const { data: session } = useSession()
 
   return (
     <div className="flex flex-col h-full bg-[#0d1f0d] text-white">
@@ -42,22 +42,35 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <Logo size={32} variant="green" />
           <div className="flex flex-col leading-tight">
             <span className="font-bold text-sm text-white">Admin Portal</span>
-            <span className="text-[10px] font-medium tracking-widest uppercase text-brand-400">Sadhna Yogshala</span>
+            <span className="text-[10px] font-medium tracking-widest uppercase text-brand-400">
+              Sadhna Yogshala
+            </span>
           </div>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="text-white/60 hover:text-white lg:hidden" aria-label="Close admin sidebar">
+          <button
+            onClick={onClose}
+            className="text-white/60 hover:text-white lg:hidden"
+            aria-label="Close admin sidebar"
+          >
             <X className="h-5 w-5" />
           </button>
         )}
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-3 py-6 overflow-y-auto scrollbar-thin" aria-label="Admin navigation">
-        <p className="px-4 text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">Menu</p>
+      <nav
+        className="flex-1 px-3 py-6 overflow-y-auto scrollbar-thin"
+        aria-label="Admin navigation"
+      >
+        <p className="px-4 text-xs font-semibold text-white/40 uppercase tracking-wider mb-4">
+          Menu
+        </p>
         <div className="space-y-1.5">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || (href !== "/admin" && pathname.startsWith(href));
+            const isActive =
+              pathname === href ||
+              (href !== "/admin" && pathname.startsWith(href))
             return (
               <Link
                 key={href}
@@ -67,13 +80,20 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                   "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group",
                   isActive
                     ? "bg-brand-600 text-white shadow-brand"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white",
                 )}
               >
-                <Icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-white" : "text-white/50 group-hover:text-white")} />
+                <Icon
+                  className={cn(
+                    "h-5 w-5 flex-shrink-0 transition-colors",
+                    isActive
+                      ? "text-white"
+                      : "text-white/50 group-hover:text-white",
+                  )}
+                />
                 <span className="flex-1">{label}</span>
               </Link>
-            );
+            )
           })}
         </div>
       </nav>
@@ -101,7 +121,9 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               {session?.user?.name || "Admin User"}
             </p>
             <p className="text-xs text-white/50 truncate">
-              {(session?.user as any)?.role === "admin" ? "Super Admin" : "Yoga Admin"}
+              {(session?.user as any)?.role === "admin"
+                ? "Super Admin"
+                : "Yoga Admin"}
             </p>
           </div>
         </div>
@@ -115,12 +137,12 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </button>
       </div>
     </div>
-  );
+  )
 }
 
 export default function AdminSidebar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: session } = useSession();
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const { data: session } = useSession()
 
   return (
     <>
@@ -186,5 +208,5 @@ export default function AdminSidebar() {
         )}
       </AnimatePresence>
     </>
-  );
+  )
 }

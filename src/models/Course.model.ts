@@ -1,11 +1,11 @@
 /**
  * Yogshala LMS — Course Model (Extended)
  * Yoga course schema with curriculum, instructor subdocument,
- * SEO settings, tags, and media configuration.
+ * SEO settings, and media configuration.
  */
 
 import mongoose, { Schema, type Model } from "mongoose";
-import { BatchType, MeetingPlatform } from "@/constants";
+import { BatchType, MeetingPlatform, ClassSessionSource, ALL_CLASS_DAYS } from "@/constants";
 import type { ICourse } from "@/types";
 
 // ─── Media Sub-schemas ────────────────────────────────────
@@ -100,10 +100,6 @@ const courseSchema = new Schema<ICourse>(
       trim: true,
       default: "",
     },
-    tags: {
-      type: [String],
-      default: [],
-    },
     level: {
       type: String,
       enum: ["beginner", "intermediate", "advanced", "all-levels", ""],
@@ -179,6 +175,67 @@ const courseSchema = new Schema<ICourse>(
       type: String,
       required: [true, "Meeting platform is required"],
       enum: Object.values(MeetingPlatform),
+      default: MeetingPlatform.GOOGLE_MEET,
+    },
+    classDays: {
+      type: [Number],
+      default: [...ALL_CLASS_DAYS],
+      validate: {
+        validator(days: number[]) {
+          return (
+            days.length > 0 &&
+            days.every((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+          );
+        },
+        message: "classDays must be weekday numbers between 0 and 6",
+      },
+    },
+    classStartTime: {
+      type: String,
+      default: "06:30",
+      match: [/^([01]\d|2[0-3]):([0-5]\d)$/, "Class start time must be in HH:MM format"],
+    },
+    classEndTime: {
+      type: String,
+      default: "07:30",
+      match: [/^([01]\d|2[0-3]):([0-5]\d)$/, "Class end time must be in HH:MM format"],
+    },
+    calendarLinksGenerated: {
+      type: Boolean,
+      default: false,
+    },
+    calendarLinksGeneratedAt: {
+      type: Date,
+    },
+    instructorUser: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    scheduledSessions: {
+      type: [
+        new Schema(
+          {
+            scheduledDate: {
+              type: String,
+              required: true,
+              match: [/^\d{4}-\d{2}-\d{2}$/, "scheduledDate must be YYYY-MM-DD"],
+            },
+            startTime: {
+              type: String,
+              required: true,
+              match: [/^([01]\d|2[0-3]):([0-5]\d)$/, "startTime must be HH:MM"],
+            },
+            endTime: {
+              type: String,
+              required: true,
+              match: [/^([01]\d|2[0-3]):([0-5]\d)$/, "endTime must be HH:MM"],
+            },
+            slotKey: { type: String },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
     },
 
     // ─── Curriculum ─────────────────────────────────────
@@ -214,7 +271,6 @@ const courseSchema = new Schema<ICourse>(
 courseSchema.index({ isPublished: 1, batchType: 1 });
 courseSchema.index({ title: "text", description: "text" }); // Text search index
 courseSchema.index({ category: 1 });
-courseSchema.index({ tags: 1 });
 
 // ─── Pre-save: Generate/Sync slug ────────────────────────
 // ─── Pre-save: Generate/Sync slug ────────────────────────

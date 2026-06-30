@@ -1,34 +1,46 @@
 "use client";
 
 /**
- * Yogshala LMS — Course Builder Layout
- * Split-screen layout: form left, live preview right.
- * Like Shopify Customizer / Webflow editor.
+ * Yogshala LMS — Course Builder Wizard Layout
+ * Five-step flow ending in draft save options.
  */
 
-import { useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, Save, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  Image as ImageIcon,
+  DollarSign,
+  Save,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-
-import { useCourseBuilder } from "@/hooks/useCourseBuilder";
+import { useCourseBuilder, type CourseBuilderFormValues } from "@/hooks/useCourseBuilder";
 import { useCourseBuilderStore } from "@/store/courseBuilderStore";
 import type { CourseFormData } from "@/types";
 
-import SectionNav from "./SectionNav";
-import CoursePreviewPanel from "./CoursePreviewPanel";
-
 import BasicInfoSection from "./form-sections/BasicInfoSection";
+import ScheduleSection from "./form-sections/ScheduleSection";
 import ThumbnailUploader from "./form-sections/ThumbnailUploader";
 import VideoUploader from "./form-sections/VideoUploader";
 import GalleryUploader from "./form-sections/GalleryUploader";
-import PricingSection from "./form-sections/PricingSection";
+import PricingOnlySection from "./form-sections/PricingOnlySection";
 import InstructorSection from "./form-sections/InstructorSection";
-import CurriculumBuilder from "./form-sections/CurriculumBuilder";
-import SEOSettings from "./form-sections/SEOSettings";
-import PublishSettings from "./form-sections/PublishSettings";
+import DraftSaveStep from "./form-sections/DraftSaveStep";
+import { getMediaStepStatus } from "@/lib/courseMedia";
+
+const STEPS = [
+  { id: 1, label: "Basic Info", icon: BookOpen },
+  { id: 2, label: "Full Schedule", icon: CalendarDays },
+  { id: 3, label: "Media", icon: ImageIcon },
+  { id: 4, label: "Pricing & Instructor", icon: DollarSign },
+  { id: 5, label: "Save Draft", icon: Save },
+] as const;
 
 interface CourseBuilderLayoutProps {
   mode: "create" | "edit";
@@ -36,263 +48,186 @@ interface CourseBuilderLayoutProps {
   initialData?: Partial<CourseFormData>;
 }
 
-// ─── Section Wrapper ─────────────────────────────────────
-function SectionCard({
-  id,
-  title,
-  subtitle,
-  children,
-  onVisible,
-}: {
-  id: string;
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  onVisible?: (id: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!onVisible) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) onVisible(id); },
-      { threshold: 0.3 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [id, onVisible]);
-
-  return (
-    <div
-      id={`section-${id}`}
-      ref={ref}
-      className="bg-white rounded-2xl border border-cream-200 shadow-card overflow-hidden"
-    >
-      <div className="px-6 py-4 border-b border-cream-100 bg-cream-50/50">
-        <h2 className="text-sm font-bold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-xs text-sage-500 mt-0.5">{subtitle}</p>}
-      </div>
-      <div className="p-6">{children}</div>
-    </div>
-  );
-}
-
-// ─── Main Layout ─────────────────────────────────────────
 export default function CourseBuilderLayout({
   mode,
   courseId,
   initialData,
 }: CourseBuilderLayoutProps) {
-  const router = useRouter();
   const store = useCourseBuilderStore();
-  const { form, onSubmit, isSubmitting } = useCourseBuilder({ mode, courseId, initialData });
+  const [currentStep, setCurrentStep] = useState(1);
+  const thumbnailPreview = useCourseBuilderStore((s) => s.thumbnailPreview);
+  const videoPreview = useCourseBuilderStore((s) => s.videoPreview);
+  const galleryPreviews = useCourseBuilderStore((s) => s.galleryPreviews);
+  const isMediaUploading = useCourseBuilderStore((s) => s.isMediaUploading);
+  const { form, saveDraft, isSubmitting } = useCourseBuilder({
+    mode,
+    courseId,
+    initialData,
+  });
 
-  // Reset store on unmount
   useEffect(() => {
     return () => store.resetStore();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Warn on unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (store.isDirty) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [store.isDirty]);
+  const mediaStepStatus = getMediaStepStatus(
+    thumbnailPreview,
+    videoPreview,
+    galleryPreviews,
+    isMediaUploading
+  );
+  const canProceedFromMedia = mediaStepStatus.ready;
 
-  const handleSectionVisible = (id: string) => {
-    store.setActiveSection(id as any);
+  const goNext = async () => {
+    const fieldsByStep: Record<number, (keyof CourseBuilderFormValues)[]> = {
+      1: ["title", "description"],
+      2: ["startDate", "endDate", "scheduledSessions"],
+      3: [],
+      4: ["price", "instructorUserId", "instructorName"],
+      5: [],
+    };
+
+    if (currentStep === 3 && !canProceedFromMedia) {
+      toast.error(mediaStepStatus.message);
+      return;
+    }
+
+    const valid = await form.trigger(fieldsByStep[currentStep]);
+    if (!valid) return;
+    setCurrentStep((step) => Math.min(step + 1, STEPS.length));
   };
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-cream-50">
-      {/* ─── Top Bar ───────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-cream-200 shadow-sm">
-        <div className="flex items-center justify-between px-6 py-3 max-w-[1800px] mx-auto">
-          {/* Left: Back + title */}
+    <div className="flex min-h-screen flex-col bg-cream-50">
+      <div className="sticky top-0 z-20 border-b border-cream-200 bg-white/90 backdrop-blur-md shadow-sm">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-4">
             <Link
               href="/admin/courses"
-              className="flex items-center gap-1.5 text-sage-500 hover:text-brand-600 transition-colors text-sm font-medium"
+              className="flex items-center gap-1.5 text-sm font-medium text-sage-500 transition hover:text-brand-600"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Courses</span>
+              Courses
             </Link>
             <div className="h-4 w-px bg-cream-200" />
             <div>
               <h1 className="text-sm font-bold text-gray-900">
-                {mode === "create" ? "Create New Course" : "Edit Course"}
+                {mode === "create" ? "Create Course" : "Edit Course"}
               </h1>
-              {store.courseData.title && (
-                <p className="text-[11px] text-sage-400 truncate max-w-[200px]">
-                  {store.courseData.title}
-                </p>
-              )}
+              <p className="text-[11px] text-amber-700">Draft only — publish later from Courses</p>
             </div>
           </div>
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+            Step {currentStep} of {STEPS.length}
+          </span>
+        </div>
 
-          {/* Right: Save status + Save button */}
-          <div className="flex items-center gap-3">
-            {/* Autosave status */}
-            {mode === "edit" && store.courseId && (
-              <div className={cn(
-                "hidden sm:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg",
-                store.isSaving ? "text-blue-600 bg-blue-50"
-                : store.lastSaved ? "text-green-600 bg-green-50"
-                : store.isDirty ? "text-amber-600 bg-amber-50"
-                : "text-sage-500 bg-cream-50"
-              )}>
-                {store.isSaving ? (
-                  <><Clock className="h-3.5 w-3.5 animate-spin" /> Saving...</>
-                ) : store.lastSaved ? (
-                  <><CheckCircle2 className="h-3.5 w-3.5" /> Saved</>
-                ) : store.isDirty ? (
-                  <><AlertCircle className="h-3.5 w-3.5" /> Unsaved</>
-                ) : null}
-              </div>
-            )}
-
-            {/* Published badge */}
-            {form.watch("isPublished") ? (
-              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                Published
-              </span>
-            ) : (
-              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                Draft
-              </span>
-            )}
-
-            {/* Save button */}
-            <motion.button
-              type="button"
-              onClick={onSubmit}
-              disabled={isSubmitting}
-              whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
-              whileTap={{ scale: isSubmitting ? 1 : 0.97 }}
-              className={cn(
-                "flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl transition-all shadow-brand",
-                isSubmitting
-                  ? "bg-brand-400 text-white cursor-not-allowed"
-                  : "bg-brand-600 text-white hover:bg-brand-700"
-              )}
-            >
-              <Save className="h-4 w-4" />
-              {isSubmitting ? "Saving..." : mode === "create" ? "Create" : "Save"}
-            </motion.button>
-          </div>
+        <div className="mx-auto grid max-w-4xl grid-cols-5 gap-2 px-6 pb-4">
+          {STEPS.map((step) => {
+            const Icon = step.icon;
+            const isActive = currentStep === step.id;
+            const isDone = currentStep > step.id;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => step.id < currentStep && setCurrentStep(step.id)}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition",
+                  isActive && "border-brand-300 bg-brand-50 text-brand-700",
+                  isDone && "border-green-200 bg-green-50 text-green-700",
+                  !isActive && !isDone && "border-cream-200 bg-white text-sage-500"
+                )}
+              >
+                {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">{step.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ─── Main Content ──────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden max-w-[1800px] mx-auto w-full">
-        {/* Left: Form */}
-        <div className="flex-1 flex gap-6 p-6 overflow-y-auto min-w-0">
-          {/* Section nav (xl+) */}
-          <SectionNav />
-
-          {/* Form sections */}
-          <div className="flex-1 space-y-6 min-w-0 max-w-2xl">
-            <form onSubmit={onSubmit} className="space-y-6">
-              <SectionCard
-                id="basic"
-                title="Basic Information"
-                subtitle="Core details that define your course"
-                onVisible={handleSectionVisible}
-              >
+      <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto p-6">
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="rounded-2xl border border-cream-200 bg-white p-6 shadow-card"
+          >
+            {currentStep === 1 && (
+              <>
+                <h2 className="mb-4 text-lg font-bold text-gray-900">Basic Information</h2>
                 <BasicInfoSection form={form} />
-              </SectionCard>
-
-              <SectionCard
-                id="thumbnail"
-                title="Course Thumbnail"
-                subtitle="The cover image students see first"
-                onVisible={handleSectionVisible}
-              >
-                <ThumbnailUploader />
-              </SectionCard>
-
-              <SectionCard
-                id="video"
-                title="Intro Video"
-                subtitle="A preview video to attract enrollments"
-                onVisible={handleSectionVisible}
-              >
-                <VideoUploader />
-              </SectionCard>
-
-              <SectionCard
-                id="gallery"
-                title="Gallery"
-                subtitle="Additional images showcasing the course"
-                onVisible={handleSectionVisible}
-              >
-                <GalleryUploader />
-              </SectionCard>
-
-              <SectionCard
-                id="pricing"
-                title="Pricing & Batch"
-                subtitle="Set pricing, duration, and schedule"
-                onVisible={handleSectionVisible}
-              >
-                <PricingSection form={form} />
-              </SectionCard>
-
-              <SectionCard
-                id="instructor"
-                title="Instructor"
-                subtitle="Who will be teaching this course?"
-                onVisible={handleSectionVisible}
-              >
-                <InstructorSection form={form} />
-              </SectionCard>
-
-              <SectionCard
-                id="curriculum"
-                title="Curriculum"
-                subtitle="Build your course outline with sections and lessons"
-                onVisible={handleSectionVisible}
-              >
-                <CurriculumBuilder />
-              </SectionCard>
-
-              <SectionCard
-                id="seo"
-                title="SEO Settings"
-                subtitle="Optimize for search engine visibility"
-                onVisible={handleSectionVisible}
-              >
-                <SEOSettings form={form} />
-              </SectionCard>
-
-              <SectionCard
-                id="publish"
-                title="Publish Settings"
-                subtitle="Control visibility and publishing"
-                onVisible={handleSectionVisible}
-              >
-                <PublishSettings
+              </>
+            )}
+            {currentStep === 2 && (
+              <>
+                <h2 className="mb-4 text-lg font-bold text-gray-900">Full Schedule</h2>
+                <ScheduleSection form={form} />
+              </>
+            )}
+            {currentStep === 3 && (
+              <>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Thumbnail, Video & Gallery</h2>
+                <p className="mb-4 text-sm text-sage-500">
+                  Thumbnail is required. Video and gallery are optional, but anything you add must be uploaded.
+                </p>
+                <div className="space-y-8">
+                  <ThumbnailUploader />
+                  <VideoUploader />
+                  <GalleryUploader />
+                </div>
+              </>
+            )}
+            {currentStep === 4 && (
+              <>
+                <h2 className="mb-4 text-lg font-bold text-gray-900">Pricing & Instructor</h2>
+                <div className="space-y-8">
+                  <PricingOnlySection form={form} />
+                  <InstructorSection form={form} />
+                </div>
+              </>
+            )}
+            {currentStep === 5 && (
+              <>
+                <h2 className="mb-4 text-lg font-bold text-gray-900">Save Draft</h2>
+                <DraftSaveStep
                   form={form}
-                  onSubmit={onSubmit}
+                  onSaveDraft={saveDraft}
                   isSubmitting={isSubmitting}
-                  mode={mode}
+                  calendarLinksGenerated={initialData?.calendarLinksGenerated}
                 />
-              </SectionCard>
-            </form>
-          </div>
-        </div>
+              </>
+            )}
 
-        {/* Right: Preview panel (sticky) */}
-        <div className="hidden lg:flex flex-col w-[420px] xl:w-[480px] flex-shrink-0 p-6 border-l border-cream-200 bg-white overflow-y-auto">
-          <CoursePreviewPanel />
-        </div>
+            {currentStep < 5 && (
+              <div className="mt-8 flex items-center justify-between border-t border-cream-100 pt-6">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep((step) => Math.max(step - 1, 1))}
+                  disabled={currentStep === 1}
+                  className="inline-flex items-center gap-2 rounded-lg border border-cream-200 px-4 py-2 text-sm font-medium text-sage-600 disabled:opacity-40"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  disabled={currentStep === 3 && !canProceedFromMedia}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition",
+                    currentStep === 3 && !canProceedFromMedia
+                      ? "cursor-not-allowed bg-sage-300"
+                      : "bg-brand-600 hover:bg-brand-700"
+                  )}
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </motion.div>
       </div>
     </div>
   );

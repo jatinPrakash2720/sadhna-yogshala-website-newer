@@ -5,8 +5,19 @@
  */
 
 import { z } from "zod";
-import { BatchType, MeetingPlatform } from "@/constants";
-import { paginationSchema } from "./common.validation";
+import { BatchType, MeetingPlatform, ALL_CLASS_DAYS } from "@/constants";
+import { paginationSchema, objectIdSchema } from "./common.validation";
+
+const timeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Must be in HH:MM format");
+
+const scheduledSessionSchema = z.object({
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  startTime: timeSchema,
+  endTime: timeSchema,
+  slotKey: z.string().optional(),
+});
 
 // ─── Sub-schemas ─────────────────────────────────────────
 
@@ -49,7 +60,7 @@ const videoAssetSchema = z.object({
 /**
  * Create course schema — admin only.
  */
-export const createCourseSchema = z.object({
+const courseBodySchema = z.object({
   // Core info
   title: z
     .string({ error: "Course title is required" })
@@ -68,7 +79,6 @@ export const createCourseSchema = z.object({
     .max(5000, "Description must not exceed 5000 characters")
     .trim(),
   category: z.string().max(100).trim().optional().default(""),
-  tags: z.array(z.string().max(50)).optional().default([]),
   level: z
     .enum(["beginner", "intermediate", "advanced", "all-levels", ""])
     .optional()
@@ -105,10 +115,18 @@ export const createCourseSchema = z.object({
     .min(1, "Must have at least 1 class")
     .max(500, "Cannot exceed 500 classes"),
   meetingPlatform: z.nativeEnum(MeetingPlatform, {
-    error: "Meeting platform must be zoom or google-meet",
-  }),
+    error: "Meeting platform must be google-meet",
+  }).default(MeetingPlatform.GOOGLE_MEET),
+  classDays: z
+    .array(z.number().int().min(0).max(6))
+    .min(1, "Select at least one class day")
+    .default([...ALL_CLASS_DAYS]),
+  classStartTime: timeSchema.default("07:00"),
+  classEndTime: timeSchema.default("08:00"),
+  scheduledSessions: z.array(scheduledSessionSchema).optional().default([]),
 
   // Instructor
+  instructorUserId: objectIdSchema.optional(),
   instructorName: z
     .string({ error: "Instructor name is required" })
     .min(2, "Instructor name must be at least 2 characters")
@@ -123,14 +141,75 @@ export const createCourseSchema = z.object({
   // SEO
   seo: seoSchema.optional(),
 
-  // Publishing
+  // Publishing — builder always saves as draft
   isPublished: z.boolean().default(false).optional(),
+
+  // When true, queue Google Calendar + Meet link generation for all scheduled classes
+  generateCalendarLinks: z.boolean().optional().default(false),
 });
+
+function refineCourseSchedule(
+  data: {
+    startDate?: string;
+    endDate?: string;
+    classStartTime?: string;
+    classEndTime?: string;
+    scheduledSessions?: Array<{
+      scheduledDate: string;
+      startTime: string;
+      endTime: string;
+    }>;
+    generateCalendarLinks?: boolean;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (data.startDate && data.endDate) {
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+    if (end < start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "End date must be on or after start date",
+        path: ["endDate"],
+      });
+    }
+  }
+  if (data.classStartTime && data.classEndTime && data.classStartTime >= data.classEndTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Class end time must be after start time",
+      path: ["classEndTime"],
+    });
+  }
+
+  const sessions = data.scheduledSessions ?? [];
+  if (sessions.length > 0) {
+    sessions.forEach((session, index) => {
+      if (session.startTime >= session.endTime) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "End time must be after start time",
+          path: ["scheduledSessions", index, "endTime"],
+        });
+      }
+    });
+  }
+
+  if (data.generateCalendarLinks && sessions.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Add at least one scheduled class before generating Meet links",
+      path: ["scheduledSessions"],
+    });
+  }
+}
+
+export const createCourseSchema = courseBodySchema.superRefine(refineCourseSchedule);
 
 /**
  * Update course schema — partial version of create.
  */
-export const updateCourseSchema = createCourseSchema.partial();
+export const updateCourseSchema = courseBodySchema.partial().superRefine(refineCourseSchedule);
 
 /**
  * Course query params schema — for listing/filtering.

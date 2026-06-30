@@ -2,13 +2,10 @@
 
 /**
  * Basic Info Section — title, shortDescription, description,
- * category, tags, level, language
+ * category, level, language
  */
 
-import { useState, KeyboardEvent } from "react";
-import { UseFormReturn, FieldValues } from "react-hook-form";
-import { motion } from "framer-motion";
-import { X, Plus, BookOpen, Hash } from "lucide-react";
+import { UseFormReturn } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import type { CourseBuilderFormValues } from "@/hooks/useCourseBuilder";
 
@@ -34,30 +31,7 @@ interface BasicInfoSectionProps {
 }
 
 export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
-  const { register, setValue, watch, formState: { errors } } = form;
-  const tags = watch("tags") ?? [];
-  const [tagInput, setTagInput] = useState("");
-
-  const addTag = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed || tags.includes(trimmed) || tags.length >= 10) return;
-    setValue("tags", [...tags, trimmed], { shouldDirty: true });
-    setTagInput("");
-  };
-
-  const removeTag = (tag: string) => {
-    setValue("tags", tags.filter((t) => t !== tag), { shouldDirty: true });
-  };
-
-  const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag(tagInput);
-    }
-    if (e.key === "Backspace" && !tagInput && tags.length > 0) {
-      removeTag(tags[tags.length - 1]);
-    }
-  };
+  const { register, watch, formState: { errors } } = form;
 
   const titleLen = watch("title")?.length || 0;
   const descLen = watch("description")?.length || 0;
@@ -65,7 +39,6 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
 
   return (
     <div className="space-y-5">
-      {/* Course Title */}
       <div>
         <label className="input-label">
           Course Title <span className="text-red-500">*</span>
@@ -85,7 +58,6 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
         )}
       </div>
 
-      {/* Short Description */}
       <div>
         <label className="input-label">
           Short Description
@@ -107,7 +79,6 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
         )}
       </div>
 
-      {/* Long Description */}
       <div>
         <label className="input-label">
           Full Description <span className="text-red-500">*</span>
@@ -128,8 +99,7 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
         )}
       </div>
 
-      {/* Category + Level row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="input-label">Category</label>
           <select {...register("category")} className="input-field">
@@ -149,7 +119,6 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
         </div>
       </div>
 
-      {/* Language */}
       <div>
         <label className="input-label">Language</label>
         <select {...register("language")} className="input-field">
@@ -157,55 +126,6 @@ export default function BasicInfoSection({ form }: BasicInfoSectionProps) {
             <option key={lang} value={lang}>{lang}</option>
           ))}
         </select>
-      </div>
-
-      {/* Tags */}
-      <div>
-        <label className="input-label flex items-center gap-1.5">
-          <Hash className="h-3.5 w-3.5 text-sage-400" />
-          Tags
-          <span className="text-xs font-normal text-sage-400">(up to 10, press Enter or comma)</span>
-        </label>
-        <div className={cn(
-          "flex flex-wrap gap-2 p-3 rounded-xl border bg-white transition-all duration-200 min-h-[50px]",
-          "border-cream-300 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/10"
-        )}>
-          {tags.map((tag) => (
-            <motion.span
-              key={tag}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs font-medium px-2.5 py-1 rounded-full"
-            >
-              {tag}
-              <button
-                type="button"
-                onClick={() => removeTag(tag)}
-                className="text-brand-400 hover:text-brand-700 transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </motion.span>
-          ))}
-          <input
-            type="text"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            placeholder={tags.length === 0 ? "yoga, morning, vinyasa..." : "Add tag..."}
-            className="flex-1 min-w-[120px] text-sm outline-none placeholder:text-sage-300 text-gray-900 bg-transparent"
-          />
-          {tagInput && (
-            <button
-              type="button"
-              onClick={() => addTag(tagInput)}
-              className="text-brand-600 hover:text-brand-700"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

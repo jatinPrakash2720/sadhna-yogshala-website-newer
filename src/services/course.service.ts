@@ -5,6 +5,8 @@
 
 import { CourseRepository } from "@/repositories/course.repository";
 import { deleteMedia, deleteMultipleMedia } from "@/utils/media";
+import { CourseScheduleService } from "@/services/courseSchedule.service";
+import { enqueueCourseCalendarGeneration } from "@/lib/qstash";
 import type { ICourse } from "@/types";
 import type {
   CreateCourseInput,
@@ -14,16 +16,61 @@ import type {
 import mongoose from "mongoose";
 import { PAGINATION } from "@/constants";
 
+export interface SaveCourseResult {
+  course: ICourse;
+  calendarJob?: {
+    messageId: string;
+    estimatedDuration: string;
+    queued: boolean;
+  };
+}
+
+function stripSaveMeta<T extends Record<string, unknown>>(data: T) {
+  const {
+    generateCalendarLinks: _generateCalendarLinks,
+    instructorUserId,
+    ...rest
+  } = data;
+  return { rest, instructorUserId: instructorUserId as string | undefined };
+}
+
 export class CourseService {
   /**
-   * Create a new course.
+   * Create a new course (always draft from builder).
    */
-  static async create(data: CreateCourseInput): Promise<ICourse> {
-    return CourseRepository.create({
-      ...data,
+  static async create(data: CreateCourseInput): Promise<SaveCourseResult> {
+    const { rest, instructorUserId } = stripSaveMeta(data as Record<string, unknown>);
+    const generateCalendarLinks = Boolean(data.generateCalendarLinks);
+
+    const instructorFields = await CourseScheduleService.resolveInstructorFields(
+      instructorUserId,
+      rest.instructorName as string | undefined,
+      rest.instructor as { title?: string; bio?: string } | undefined
+    );
+
+    const course = await CourseRepository.create({
+      ...rest,
+      ...instructorFields,
+      isPublished: false,
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate),
     });
+
+    if (generateCalendarLinks) {
+      const calendarJob = await enqueueCourseCalendarGeneration(course._id.toString());
+      return {
+        course,
+        calendarJob: {
+          ...calendarJob,
+          estimatedDuration: calendarJob.inline
+            ? "completed"
+            : CourseScheduleService.getGenerationEstimate(course),
+          queued: !calendarJob.inline,
+        },
+      };
+    }
+
+    return { course };
   }
 
   /**
@@ -46,12 +93,64 @@ export class CourseService {
   static async update(
     id: string,
     data: UpdateCourseInput
-  ): Promise<ICourse | null> {
-    const updateData: Record<string, unknown> = { ...data };
+  ): Promise<SaveCourseResult | null> {
+    const { rest, instructorUserId } = stripSaveMeta(data as Record<string, unknown>);
+    const generateCalendarLinks = Boolean(data.generateCalendarLinks);
+
+    const updateData: Record<string, unknown> = {
+      ...rest,
+      isPublished: false,
+    };
+
     if (data.startDate) updateData.startDate = new Date(data.startDate);
     if (data.endDate) updateData.endDate = new Date(data.endDate);
 
-    return CourseRepository.updateById(id, updateData);
+    if (instructorUserId !== undefined || data.instructorName || data.instructor) {
+      const instructorFields = await CourseScheduleService.resolveInstructorFields(
+        instructorUserId,
+        (rest.instructorName as string | undefined) ?? data.instructorName,
+        (rest.instructor as { title?: string; bio?: string } | undefined) ??
+          data.instructor
+      );
+      Object.assign(updateData, instructorFields);
+    }
+
+    if (!generateCalendarLinks) {
+      const scheduleTouched =
+        data.startDate !== undefined ||
+        data.endDate !== undefined ||
+        data.totalClasses !== undefined ||
+        data.classDays !== undefined ||
+        data.classStartTime !== undefined ||
+        data.classEndTime !== undefined ||
+        data.scheduledSessions !== undefined;
+
+      if (scheduleTouched) {
+        updateData.calendarLinksGenerated = false;
+        updateData.calendarLinksGeneratedAt = undefined;
+      }
+    }
+
+    const course = await CourseRepository.updateById(id, updateData);
+    if (!course) {
+      return null;
+    }
+
+    if (generateCalendarLinks) {
+      const calendarJob = await enqueueCourseCalendarGeneration(course._id.toString());
+      return {
+        course,
+        calendarJob: {
+          ...calendarJob,
+          estimatedDuration: calendarJob.inline
+            ? "completed"
+            : CourseScheduleService.getGenerationEstimate(course),
+          queued: !calendarJob.inline,
+        },
+      };
+    }
+
+    return { course };
   }
 
   /**
@@ -61,7 +160,6 @@ export class CourseService {
     const course = await CourseRepository.findById(id);
     if (!course) return null;
 
-    // Clean up all Cloudinary assets before deleting the document
     await CourseService.deleteAllCourseMedia(course);
 
     return CourseRepository.deleteById(id);
@@ -69,7 +167,6 @@ export class CourseService {
 
   /**
    * Delete all Cloudinary assets attached to a course.
-   * Uses allSettled so partial failures don't abort the deletion.
    */
   static async deleteAllCourseMedia(course: ICourse): Promise<void> {
     const deletions: Promise<void>[] = [];

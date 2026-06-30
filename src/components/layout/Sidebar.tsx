@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   BookOpen,
@@ -12,24 +12,23 @@ import {
   ChevronRight,
   Menu,
   X,
-} from "lucide-react";
-import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
-import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
-import { cn } from "@/lib/utils";
-import Logo from "@/components/ui/Logo";
+} from "lucide-react"
+import { useState } from "react"
+import { signOut, useSession } from "next-auth/react"
+import { motion, AnimatePresence } from "framer-motion"
+import Image from "next/image"
+import { cn } from "@/lib/utils"
+import Logo from "@/components/ui/Logo"
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/my-courses", label: "My Courses", icon: BookOpen },
   { href: "/dashboard/classes", label: "Upcoming Classes", icon: Calendar },
-  { href: "/dashboard/workshops", label: "Workshops", icon: Calendar },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
-];
+]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const pathname = usePathname();
-  const { data: session } = useSession();
+  const pathname = usePathname()
+  const { data: session } = useSession()
 
   return (
     <div className="flex flex-col h-full">
@@ -38,12 +37,20 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         <Link href="/" className="flex items-center gap-2.5">
           <Logo size={32} variant="green" />
           <div className="flex flex-col leading-tight">
-            <span className="font-bold text-sm text-brand-900">Sadhna Yogshala</span>
-            <span className="text-[9px] font-medium tracking-widest uppercase text-sage-400">Yoga Studio</span>
+            <span className="font-bold text-sm text-brand-900">
+              Sadhna Yogshala
+            </span>
+            <span className="text-[9px] font-medium tracking-widest uppercase text-sage-400">
+              Yoga Studio
+            </span>
           </div>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="text-sage-400 hover:text-sage-700 lg:hidden" aria-label="Close sidebar">
+          <button
+            onClick={onClose}
+            className="text-sage-400 hover:text-sage-700 lg:hidden"
+            aria-label="Close sidebar"
+          >
             <X className="h-5 w-5" />
           </button>
         )}
@@ -79,10 +86,13 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin" aria-label="Dashboard navigation">
+      <nav
+        className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin"
+        aria-label="Dashboard navigation"
+      >
         <div className="space-y-1">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href;
+            const isActive = pathname === href
             return (
               <Link
                 key={href}
@@ -92,14 +102,21 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                   "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group",
                   isActive
                     ? "bg-brand-600 text-white shadow-brand"
-                    : "text-sage-700 hover:bg-brand-50 hover:text-brand-700"
+                    : "text-sage-700 hover:bg-brand-50 hover:text-brand-700",
                 )}
               >
-                <Icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-white" : "text-sage-400 group-hover:text-brand-600")} />
+                <Icon
+                  className={cn(
+                    "h-5 w-5 flex-shrink-0 transition-colors",
+                    isActive
+                      ? "text-white"
+                      : "text-sage-400 group-hover:text-brand-600",
+                  )}
+                />
                 <span className="flex-1">{label}</span>
                 {isActive && <ChevronRight className="h-4 w-4 opacity-70" />}
               </Link>
-            );
+            )
           })}
         </div>
       </nav>
@@ -112,7 +129,9 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         >
           <Bell className="h-5 w-5 text-sage-400 group-hover:text-brand-600" />
           <span className="flex-1">Notifications</span>
-          <span className="h-5 w-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+          <span className="h-5 w-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">
+            2
+          </span>
         </Link>
         <button
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-all duration-200 group"
@@ -124,12 +143,12 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         </button>
       </div>
     </div>
-  );
+  )
 }
 
 export default function DashboardSidebar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const { data: session } = useSession();
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const { data: session } = useSession()
 
   return (
     <>
@@ -145,7 +164,9 @@ export default function DashboardSidebar() {
         </button>
         <div className="flex items-center gap-2">
           <Logo size={28} variant="green" />
-          <span className="font-bold text-sm text-brand-900">Sadhna Yogshala</span>
+          <span className="font-bold text-sm text-brand-900">
+            Sadhna Yogshala
+          </span>
         </div>
         {session?.user?.image ? (
           <div className="relative h-8 w-8 rounded-full overflow-hidden border border-cream-200">
@@ -193,5 +214,5 @@ export default function DashboardSidebar() {
         )}
       </AnimatePresence>
     </>
-  );
+  )
 }

@@ -1,13 +1,11 @@
 /**
  * Yogshala LMS — Course Builder Zustand Store
- * Single source of truth for the live course preview.
- * Synced from React Hook Form via watch() on every change.
+ * Media previews and form sync state for the course builder.
  */
 
 import { create } from "zustand";
+import { ALL_CLASS_DAYS } from "@/constants";
 import type { CourseFormData, CourseFormSection } from "@/types";
-
-export type PreviewMode = "desktop" | "tablet" | "mobile";
 
 export type BuilderSection =
   | "basic"
@@ -50,7 +48,6 @@ interface CourseBuilderState {
   galleryPreviews: GalleryPreview[];
 
   // ─── UI state ─────────────────────────────────────
-  previewMode: PreviewMode;
   activeSection: BuilderSection;
   collapsedSections: Set<BuilderSection>;
 
@@ -59,6 +56,7 @@ interface CourseBuilderState {
   isSaving: boolean;
   lastSaved: Date | null;
   courseId: string | null;
+  isMediaUploading: boolean;
 
   // ─── Actions ──────────────────────────────────────
   updateCourseData: (data: Partial<CourseFormData>) => void;
@@ -71,7 +69,8 @@ interface CourseBuilderState {
   addGalleryPreview: (preview: GalleryPreview) => void;
   removeGalleryPreview: (index: number) => void;
 
-  setPreviewMode: (mode: PreviewMode) => void;
+  setIsMediaUploading: (uploading: boolean) => void;
+
   setActiveSection: (section: BuilderSection) => void;
   toggleSection: (section: BuilderSection) => void;
 
@@ -99,7 +98,6 @@ const DEFAULT_COURSE_DATA: Partial<CourseFormData> = {
   shortDescription: "",
   description: "",
   category: "",
-  tags: [],
   level: "",
   language: "English",
   price: 0,
@@ -107,9 +105,11 @@ const DEFAULT_COURSE_DATA: Partial<CourseFormData> = {
   durationInMonths: 1,
   totalClasses: 1,
   batchType: "morning",
-  meetingPlatform: "zoom",
   startDate: "",
   endDate: "",
+  scheduledSessions: [],
+  classDays: [...ALL_CLASS_DAYS],
+  instructorUserId: "",
   instructorName: "",
   instructorTitle: "",
   instructorBio: "",
@@ -134,13 +134,13 @@ export const useCourseBuilderStore = create<CourseBuilderState>((set, get) => ({
   thumbnailPreview: null,
   videoPreview: null,
   galleryPreviews: [],
-  previewMode: "desktop",
   activeSection: "basic",
   collapsedSections: new Set(),
   isDirty: false,
   isSaving: false,
   lastSaved: null,
   courseId: null,
+  isMediaUploading: false,
 
   // ─── Actions ──────────────────────────────────────
   updateCourseData: (data) =>
@@ -167,7 +167,8 @@ export const useCourseBuilderStore = create<CourseBuilderState>((set, get) => ({
       galleryPreviews: state.galleryPreviews.filter((_, i) => i !== index),
     })),
 
-  setPreviewMode: (mode) => set({ previewMode: mode }),
+  setIsMediaUploading: (uploading) => set({ isMediaUploading: uploading }),
+
   setActiveSection: (section) => set({ activeSection: section }),
   toggleSection: (section) =>
     set((state) => {
@@ -253,12 +254,12 @@ export const useCourseBuilderStore = create<CourseBuilderState>((set, get) => ({
       thumbnailPreview: null,
       videoPreview: null,
       galleryPreviews: [],
-      previewMode: "desktop",
       activeSection: "basic",
       collapsedSections: new Set(),
       isDirty: false,
       isSaving: false,
       lastSaved: null,
       courseId: null,
+      isMediaUploading: false,
     }),
 }));

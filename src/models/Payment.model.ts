@@ -7,6 +7,15 @@ import mongoose, { Schema, type Model } from "mongoose";
 import { PaymentStatus, DEFAULT_CURRENCY } from "@/constants";
 import type { IPayment } from "@/types";
 
+const checkoutPayloadSchema = new Schema(
+  {
+    orderId: { type: String, required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const paymentSchema = new Schema<IPayment>(
   {
     user: {
@@ -19,13 +28,25 @@ const paymentSchema = new Schema<IPayment>(
       ref: "Course",
       required: [true, "Course reference is required"],
     },
+    internalOrderId: {
+      type: String,
+      required: [true, "Internal order ID is required"],
+      unique: true,
+    },
+    idempotencyKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     razorpayOrderId: {
       type: String,
-      required: [true, "Razorpay order ID is required"],
       unique: true,
+      sparse: true,
     },
     razorpayPaymentId: {
       type: String,
+      unique: true,
+      sparse: true,
     },
     razorpaySignature: {
       type: String,
@@ -45,13 +66,19 @@ const paymentSchema = new Schema<IPayment>(
       enum: Object.values(PaymentStatus),
       default: PaymentStatus.PENDING,
     },
+    paymentExpiry: {
+      type: Date,
+      required: [true, "Payment expiry is required"],
+    },
+    checkoutPayload: {
+      type: checkoutPayloadSchema,
+    },
   },
   {
     timestamps: true,
     toJSON: {
       transform(_doc, ret: Record<string, unknown>) {
         delete ret.__v;
-        // Don't expose Razorpay signature in API responses
         delete ret.razorpaySignature;
         return ret;
       },
@@ -62,6 +89,14 @@ const paymentSchema = new Schema<IPayment>(
 // ─── Indexes ─────────────────────────────────────────────
 paymentSchema.index({ user: 1, createdAt: -1 });
 paymentSchema.index({ paymentStatus: 1 });
+// Layer 3: one active pending checkout per user+course
+paymentSchema.index(
+  { user: 1, course: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { paymentStatus: PaymentStatus.PENDING },
+  }
+);
 
 const Payment: Model<IPayment> =
   mongoose.models.Payment || mongoose.model<IPayment>("Payment", paymentSchema);

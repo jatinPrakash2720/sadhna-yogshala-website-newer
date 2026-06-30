@@ -16,7 +16,6 @@ export interface CourseCard {
   category: string;
   isLive: boolean;
   isFeatured?: boolean;
-  tags?: string[];
 }
 
 export interface Category {

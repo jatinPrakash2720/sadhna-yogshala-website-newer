@@ -22,7 +22,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Vinyasa",
     isLive: true,
     isFeatured: true,
-    tags: ["morning", "flow", "beginner-friendly"],
   },
   {
     id: "c2",
@@ -42,7 +41,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Yin",
     isLive: false,
     isFeatured: true,
-    tags: ["yin", "restorative", "flexibility"],
   },
   {
     id: "c3",
@@ -62,7 +60,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Ashtanga",
     isLive: true,
     isFeatured: false,
-    tags: ["ashtanga", "traditional", "advanced"],
   },
   {
     id: "c4",
@@ -82,7 +79,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Pranayama",
     isLive: false,
     isFeatured: true,
-    tags: ["breathwork", "pranayama", "meditation"],
   },
   {
     id: "c5",
@@ -102,7 +98,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Kids",
     isLive: true,
     isFeatured: false,
-    tags: ["kids", "fun", "playful"],
   },
   {
     id: "c6",
@@ -122,7 +117,6 @@ export const MOCK_COURSES: CourseCard[] = [
     category: "Yoga Nidra",
     isLive: false,
     isFeatured: true,
-    tags: ["nidra", "sleep", "relaxation"],
   },
 ];
 

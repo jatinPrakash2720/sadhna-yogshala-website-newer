@@ -3,7 +3,7 @@
  * Shared interfaces and types used across the backend.
  */
 
-import { Types } from "mongoose";
+import { Document, Types } from "mongoose";
 import {
   UserRole,
   AuthProvider,
@@ -13,12 +13,12 @@ import {
   MeetingPlatform,
   PaymentStatus,
   ClassStatus,
-  WorkshopMode,
-  WorkshopEnrollmentStatus,
+  CalendarSyncStatus,
+  ClassSessionSource,
 } from "@/constants";
 
 // ─── Base Document Interface ─────────────────────────────
-export interface IBaseDocument {
+export interface IBaseDocument extends Document {
   _id: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -92,6 +92,14 @@ export interface ISEOSettings {
   keywords?: string[];
 }
 
+// ─── Course Schedule ─────────────────────────────────────
+export interface IScheduledSession {
+  scheduledDate: string;
+  startTime: string;
+  endTime: string;
+  slotKey?: string;
+}
+
 // ─── Course ──────────────────────────────────────────────
 export interface ICourse extends IBaseDocument {
   // Core info
@@ -100,7 +108,6 @@ export interface ICourse extends IBaseDocument {
   shortDescription?: string;
   description: string;
   category?: string;
-  tags?: string[];
   level?: string;
   language?: string;
 
@@ -123,6 +130,15 @@ export interface ICourse extends IBaseDocument {
   totalClasses: number;
   meetingPlatform: MeetingPlatform;
 
+  // Live class schedule (used to auto-generate ClassSessions)
+  classDays: number[];
+  classStartTime: string;
+  classEndTime: string;
+  calendarLinksGenerated: boolean;
+  calendarLinksGeneratedAt?: Date;
+  instructorUser?: Types.ObjectId;
+  scheduledSessions?: IScheduledSession[];
+
   // Curriculum
   curriculum?: ICurriculumSection[];
 
@@ -133,77 +149,7 @@ export interface ICourse extends IBaseDocument {
   isPublished: boolean;
 }
 
-// ─── Workshop ────────────────────────────────────────────
-export interface IWorkshopTimelineItem {
-  _id?: Types.ObjectId | string;
-  time: string;
-  title: string;
-  description?: string;
-}
 
-export interface IWorkshopLocation {
-  venueName?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  googleMapsLink?: string;
-}
-
-export interface IWorkshop extends IBaseDocument {
-  title: string;
-  shortDescription: string;
-  fullDescription: string;
-  slug: string;
-  category: string;
-  tags: string[];
-  thumbnail?: IMediaAsset;
-  galleryImages: IMediaAsset[];
-  introVideo?: IVideoAsset;
-  price: number;
-  discountPrice?: number;
-  startDate: Date;
-  endDate: Date;
-  startTime: string;
-  endTime: string;
-  durationInHours: number;
-  durationInDays: number;
-  mode: WorkshopMode;
-  venueName?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  googleMapsLink?: string;
-  meetingPlatform?: MeetingPlatform | string;
-  meetingLink?: string;
-  maxParticipants: number;
-  currentParticipants: number;
-  waitlistEnabled: boolean;
-  instructor: string;
-  guestInstructor?: string;
-  speakerBio: string;
-  benefits: string[];
-  requirements: string[];
-  timeline: IWorkshopTimelineItem[];
-  isPublished: boolean;
-}
-
-export interface IWorkshopEnrollment extends IBaseDocument {
-  student: Types.ObjectId;
-  workshop: Types.ObjectId;
-  status: WorkshopEnrollmentStatus;
-  paymentStatus: PaymentStatus;
-  enrolledAt: Date;
-}
-
-export interface IWorkshopAttendance extends IBaseDocument {
-  student: Types.ObjectId;
-  workshop: Types.ObjectId;
-  attended: boolean;
-  checkedInAt?: Date;
-  notes?: string;
-}
 
 // ─── Enrollment ──────────────────────────────────────────
 export interface IEnrollment extends IBaseDocument {
@@ -213,18 +159,31 @@ export interface IEnrollment extends IBaseDocument {
   paymentStatus: PaymentStatus;
   completed: boolean;
   enrolledAt: Date;
+  calendarSyncStatus: CalendarSyncStatus;
+  calendarSyncError?: string;
+  calendarSyncedAt?: Date;
 }
 
 // ─── Payment ─────────────────────────────────────────────
+export interface IPaymentCheckoutPayload {
+  orderId: string;
+  amount: number;
+  currency: string;
+}
+
 export interface IPayment extends IBaseDocument {
   user: Types.ObjectId;
   course: Types.ObjectId;
-  razorpayOrderId: string;
+  internalOrderId: string;
+  idempotencyKey?: string;
+  razorpayOrderId?: string;
   razorpayPaymentId?: string;
   razorpaySignature?: string;
   amount: number;
   currency: string;
   paymentStatus: PaymentStatus;
+  paymentExpiry: Date;
+  checkoutPayload?: IPaymentCheckoutPayload;
 }
 
 // ─── Class Session ───────────────────────────────────────
@@ -232,10 +191,13 @@ export interface IClassSession extends IBaseDocument {
   course: Types.ObjectId;
   title: string;
   meetingLink?: string;
+  googleEventId?: string;
   scheduledDate: Date;
   startTime: string;
   endTime: string;
   status: ClassStatus;
+  source?: ClassSessionSource;
+  sessionNumber?: number;
 }
 
 // ─── Attendance ──────────────────────────────────────────
@@ -394,7 +356,6 @@ export interface CourseFormData {
   shortDescription: string;
   description: string;
   category: string;
-  tags: string[];
   level: string;
   language: string;
 
@@ -407,8 +368,14 @@ export interface CourseFormData {
   meetingPlatform: string;
   startDate: string;
   endDate: string;
+  classDays: number[];
+  classStartTime: string;
+  classEndTime: string;
+
+  scheduledSessions: IScheduledSession[];
 
   // Instructor
+  instructorUserId: string;
   instructorName: string;
   instructorTitle: string;
   instructorBio: string;
@@ -429,50 +396,7 @@ export interface CourseFormData {
 
   // Publishing
   isPublished: boolean;
+  calendarLinksGenerated?: boolean;
 }
 
-// ─── Workshop Builder Form Types ─────────────────────────
-export interface WorkshopFormTimelineItem {
-  id: string;
-  time: string;
-  title: string;
-  description: string;
-}
 
-export interface WorkshopFormData {
-  title: string;
-  shortDescription: string;
-  fullDescription: string;
-  slug: string;
-  category: string;
-  tags: string[];
-  thumbnail?: IMediaAsset;
-  introVideo?: IVideoAsset;
-  galleryImages?: IMediaAsset[];
-  price: number;
-  discountPrice?: number;
-  startDate: string;
-  endDate: string;
-  startTime: string;
-  endTime: string;
-  durationInHours: number;
-  durationInDays: number;
-  mode: string;
-  venueName: string;
-  address: string;
-  city: string;
-  state: string;
-  country: string;
-  googleMapsLink: string;
-  meetingPlatform: string;
-  meetingLink: string;
-  maxParticipants: number;
-  waitlistEnabled: boolean;
-  instructor: string;
-  guestInstructor: string;
-  speakerBio: string;
-  benefits: string[];
-  requirements: string[];
-  timeline: WorkshopFormTimelineItem[];
-  isPublished: boolean;
-}

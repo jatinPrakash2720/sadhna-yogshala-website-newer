@@ -12,6 +12,7 @@ import { AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import CourseBuilderLayout from "@/components/course-builder/CourseBuilderLayout";
 import type { CourseFormData } from "@/types";
+import { ALL_CLASS_DAYS } from "@/constants";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,7 +31,6 @@ function mapCourseToFormData(course: any): Partial<CourseFormData> {
     shortDescription: course.shortDescription ?? "",
     description: course.description ?? "",
     category: course.category ?? "",
-    tags: course.tags ?? [],
     level: course.level ?? "",
     language: course.language ?? "English",
     price: course.price ?? 0,
@@ -38,9 +38,21 @@ function mapCourseToFormData(course: any): Partial<CourseFormData> {
     durationInMonths: course.durationInMonths ?? 1,
     totalClasses: course.totalClasses ?? 1,
     batchType: course.batchType ?? "morning",
-    meetingPlatform: course.meetingPlatform ?? "zoom",
     startDate: course.startDate ? course.startDate.slice(0, 10) : "",
     endDate: course.endDate ? course.endDate.slice(0, 10) : "",
+    scheduledSessions: (course.scheduledSessions ?? []).map((session: {
+      scheduledDate: string;
+      startTime: string;
+      endTime: string;
+      slotKey?: string;
+    }) => ({
+      scheduledDate: session.scheduledDate,
+      startTime: session.startTime,
+      endTime: session.endTime,
+      slotKey: session.slotKey,
+    })),
+    classDays: course.classDays ?? [...ALL_CLASS_DAYS],
+    instructorUserId: course.instructorUser?.toString?.() ?? course.instructorUser ?? "",
     instructorName: course.instructor?.name ?? course.instructorName ?? "",
     instructorTitle: course.instructor?.title ?? "",
     instructorBio: course.instructor?.bio ?? "",
@@ -59,6 +71,7 @@ function mapCourseToFormData(course: any): Partial<CourseFormData> {
     seoSlug: course.seo?.slug ?? "",
     keywords: course.seo?.keywords ?? [],
     isPublished: course.isPublished ?? false,
+    calendarLinksGenerated: course.calendarLinksGenerated ?? false,
     
     // Media assets
     thumbnail: course.thumbnail,

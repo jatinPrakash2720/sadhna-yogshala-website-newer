@@ -4,7 +4,7 @@
  */
 
 import mongoose, { Schema, type Model } from "mongoose";
-import { PaymentStatus } from "@/constants";
+import { PaymentStatus, CalendarSyncStatus } from "@/constants";
 import type { IEnrollment } from "@/types";
 
 const enrollmentSchema = new Schema<IEnrollment>(
@@ -38,6 +38,18 @@ const enrollmentSchema = new Schema<IEnrollment>(
       type: Date,
       default: Date.now,
     },
+    calendarSyncStatus: {
+      type: String,
+      enum: Object.values(CalendarSyncStatus),
+      default: CalendarSyncStatus.PENDING,
+    },
+    calendarSyncError: {
+      type: String,
+      trim: true,
+    },
+    calendarSyncedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -54,6 +66,7 @@ const enrollmentSchema = new Schema<IEnrollment>(
 // Prevent duplicate enrollments for the same student-course pair
 enrollmentSchema.index({ student: 1, course: 1 }, { unique: true });
 enrollmentSchema.index({ student: 1, paymentStatus: 1 });
+enrollmentSchema.index({ calendarSyncStatus: 1, paymentStatus: 1 });
 
 const Enrollment: Model<IEnrollment> =
   mongoose.models.Enrollment || mongoose.model<IEnrollment>("Enrollment", enrollmentSchema);

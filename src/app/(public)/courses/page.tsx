@@ -6,7 +6,6 @@ import { Search, SlidersHorizontal, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import CourseCard from "@/components/courses/CourseCard";
-import { MOCK_CATEGORIES } from "@/lib/mocks/data";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { mapCourseToCard } from "@/lib/utils/mappers";
@@ -17,14 +16,12 @@ const stagger = { show: { transition: { staggerChildren: 0.1 } } };
 
 export default function CoursesPage() {
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
   const { data: coursesData, isLoading, error } = useQuery({
-    queryKey: ["courses", search, selectedCategory],
+    queryKey: ["courses", search],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
-      if (selectedCategory !== "All") params.append("category", selectedCategory);
       params.append("isPublished", "true");
 
       const res = await axios.get<ApiResponse<ICourse[]>>(`/api/courses?${params.toString()}`);
@@ -56,28 +53,6 @@ export default function CoursesPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 leftIcon={<Search className="h-5 w-5" />}
               />
-            </div>
-            
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              <button
-                onClick={() => setSelectedCategory("All")}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === "All" ? "bg-brand-600 text-white" : "bg-white text-sage-600 hover:bg-cream-100"
-                }`}
-              >
-                All Courses
-              </button>
-              {MOCK_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.name)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${
-                    selectedCategory === cat.name ? "bg-brand-600 text-white" : "bg-white text-sage-600 hover:bg-cream-100"
-                  }`}
-                >
-                  {cat.icon} {cat.name}
-                </button>
-              ))}
             </div>
           </motion.div>
 
@@ -120,7 +95,7 @@ export default function CoursesPage() {
               <p className="text-sage-500 max-w-md mx-auto mb-6">
                 We couldn't find any courses matching your search criteria. Try adjusting your filters or search term.
               </p>
-              <Button onClick={() => { setSearch(""); setSelectedCategory("All"); }}>
+              <Button onClick={() => { setSearch(""); }}>
                 Clear all filters
               </Button>
             </motion.div>

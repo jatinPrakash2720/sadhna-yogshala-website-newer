@@ -7,9 +7,11 @@
 import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, X, GalleryHorizontal, AlertCircle, ImageIcon, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useCourseBuilderStore } from "@/store/courseBuilderStore";
 import { useMediaUpload, validateImageFile, formatFileSize } from "@/hooks/useMediaUpload";
+import { parseMediaUploadField } from "@/lib/courseMedia";
 
 export default function GalleryUploader() {
   const { courseId, galleryPreviews, addGalleryPreview, removeGalleryPreview, setGalleryPreviews } =
@@ -19,17 +21,36 @@ export default function GalleryUploader() {
   const [deletingIdx, setDeletingIdx] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { isUploading, progress, error, upload, deleteGalleryItem, reset } = useMediaUpload({
+  const { isUploading, progress, error, upload, deleteGalleryItem } = useMediaUpload({
     courseId,
     mediaType: "gallery",
-    onSuccess: (data: any) => {
-      const gallery = data?.gallery || data?.data?.course?.gallery || [];
-      const newPreviews = gallery.map((g: any) => ({
-        url: g.url,
-        public_id: g.public_id,
-        isLocal: false,
+    onSuccess: (result) => {
+      const uploaded = parseMediaUploadField(result, "gallery");
+      if (!Array.isArray(uploaded) || uploaded.length === 0) return;
+
+      const newCloud = uploaded.map((item) => ({
+        url: item.url,
+        public_id: item.public_id,
+        isLocal: false as const,
       }));
-      setGalleryPreviews(newPreviews);
+
+      const { galleryPreviews: current, courseId: activeCourseId } =
+        useCourseBuilderStore.getState();
+      const existingCloud = current.filter((item) => !item.isLocal);
+
+      // With course attach, API returns the full gallery; without courseId, only new items
+      const merged =
+        activeCourseId && newCloud.length >= existingCloud.length
+          ? newCloud
+          : [
+              ...existingCloud,
+              ...newCloud.filter(
+                (item) =>
+                  !existingCloud.some((existing) => existing.public_id === item.public_id)
+              ),
+            ];
+
+      setGalleryPreviews(merged);
       setPendingFiles([]);
     },
   });
@@ -64,28 +85,40 @@ export default function GalleryUploader() {
   };
 
   const handleUploadAll = async () => {
-    if (pendingFiles.length === 0 || !courseId) return;
+    if (pendingFiles.length === 0) return;
     await upload(pendingFiles);
-    reset();
   };
 
   const handleDelete = async (idx: number) => {
     const item = galleryPreviews[idx];
-    if (!item) return;
+    if (!item || deletingIdx !== null) return;
 
-    if (!item.isLocal && item.public_id) {
+    if (!item.isLocal) {
+      if (!item.public_id) {
+        toast.error("Cannot delete this image (missing asset id)");
+        return;
+      }
+
       setDeletingIdx(idx);
-      await deleteGalleryItem(item.public_id);
+      const ok = await deleteGalleryItem(item.public_id);
       setDeletingIdx(null);
+      if (!ok) return;
+    } else {
+      const localIndex = galleryPreviews
+        .slice(0, idx)
+        .filter((preview) => preview.isLocal).length;
+      setPendingFiles((prev) => prev.filter((_, i) => i !== localIndex));
     }
+
     removeGalleryPreview(idx);
-    if (item.isLocal) {
-      setPendingFiles((prev) => prev.filter((_, i) => i !== idx - galleryPreviews.filter(g => !g.isLocal).length));
-    }
   };
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">Gallery Images</h3>
+        <span className="text-xs text-sage-500">Optional</span>
+      </div>
       {/* Drop zone */}
       <motion.div
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -155,9 +188,12 @@ export default function GalleryUploader() {
                 {/* Delete button */}
                 <button
                   type="button"
-                  onClick={() => handleDelete(idx)}
-                  disabled={deletingIdx === idx}
-                  className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDelete(idx);
+                  }}
+                  disabled={deletingIdx === idx || isUploading}
+                  className="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 shadow-sm disabled:opacity-50"
                 >
                   {deletingIdx === idx ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

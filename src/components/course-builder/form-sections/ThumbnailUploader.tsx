@@ -6,28 +6,31 @@
 
 import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, X, RefreshCw, ImageIcon, AlertCircle } from "lucide-react";
+import { Upload, X, ImageIcon, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCourseBuilderStore } from "@/store/courseBuilderStore";
 import { useMediaUpload, validateImageFile, formatFileSize } from "@/hooks/useMediaUpload";
+import { parseMediaUploadField } from "@/lib/courseMedia";
 
 export default function ThumbnailUploader() {
   const { courseId, thumbnailPreview, setThumbnailPreview } = useCourseBuilderStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const [localFile, setLocalFile] = useState<File | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { isUploading, progress, error, upload, reset } = useMediaUpload({
+  const { isUploading, progress, error, upload, deleteCourseMedia, reset } = useMediaUpload({
     courseId,
     mediaType: "thumbnail",
-    onSuccess: (data: any) => {
-      const thumb = data?.thumbnail || data?.data?.course?.thumbnail;
-      if (thumb?.url) {
-        setThumbnailPreview({ 
-          url: thumb.url, 
-          public_id: thumb.public_id, 
-          isLocal: false 
+    onSuccess: (result) => {
+      const thumb = parseMediaUploadField(result, "thumbnail");
+      if (thumb && !Array.isArray(thumb) && thumb.url) {
+        setThumbnailPreview({
+          url: thumb.url,
+          public_id: thumb.public_id,
+          isLocal: false,
         });
+        setLocalFile(null);
       }
     },
   });
@@ -63,7 +66,17 @@ export default function ThumbnailUploader() {
     await upload(localFile);
   };
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
+    if (isRemoving || isUploading) return;
+
+    const preview = thumbnailPreview;
+    if (preview && !preview.isLocal && preview.public_id) {
+      setIsRemoving(true);
+      const ok = await deleteCourseMedia("thumbnail", preview.public_id);
+      setIsRemoving(false);
+      if (!ok) return;
+    }
+
     setThumbnailPreview(null);
     setLocalFile(null);
     reset();
@@ -72,6 +85,12 @@ export default function ThumbnailUploader() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">
+          Course Thumbnail <span className="text-red-500">*</span>
+        </h3>
+        <span className="text-xs text-sage-500">Required — must be uploaded</span>
+      </div>
       {/* Drop zone */}
       <AnimatePresence mode="wait">
         {!thumbnailPreview ? (
@@ -132,23 +151,16 @@ export default function ThumbnailUploader() {
               alt="Thumbnail preview"
               className="w-full h-full object-cover"
             />
-            {/* Actions overlay */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => { inputRef.current?.click(); }}
-                className="flex items-center gap-2 bg-white text-gray-900 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-cream-50 transition-colors"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Replace
-              </button>
+            {/* Actions — always visible */}
+            <div className="absolute top-2 right-2 flex gap-2 z-10">
               <button
                 type="button"
                 onClick={handleRemove}
-                className="flex items-center gap-2 bg-red-500 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                disabled={isRemoving || isUploading}
+                className="flex items-center gap-1.5 bg-red-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-600 shadow-sm disabled:opacity-50"
               >
                 <X className="h-3.5 w-3.5" />
-                Remove
+                {isRemoving ? "Removing..." : "Remove"}
               </button>
             </div>
             {/* Local badge */}
@@ -237,7 +249,7 @@ export default function ThumbnailUploader() {
       )}
 
       <p className="text-[11px] text-sage-400">
-        💡 Tip: Save the course first, then upload media. The thumbnail will instantly update in the preview.
+        The thumbnail is required. Upload it to Cloudinary before moving to the next step.
       </p>
     </div>
   );

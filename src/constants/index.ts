@@ -39,25 +39,10 @@ export enum BatchType {
 
 // ─── Meeting Platform ────────────────────────────────────
 export enum MeetingPlatform {
-  ZOOM = "zoom",
   GOOGLE_MEET = "google-meet",
-  TEAMS = "teams",
-  OTHER = "other",
 }
 
-// ─── Workshop Mode ───────────────────────────────────────
-export enum WorkshopMode {
-  ONLINE = "online",
-  OFFLINE = "offline",
-  HYBRID = "hybrid",
-}
 
-// ─── Workshop Enrollment Status ─────────────────────────
-export enum WorkshopEnrollmentStatus {
-  ENROLLED = "enrolled",
-  WAITLISTED = "waitlisted",
-  CANCELLED = "cancelled",
-}
 
 // ─── Payment Status ──────────────────────────────────────
 export enum PaymentStatus {
@@ -73,6 +58,58 @@ export enum ClassStatus {
   COMPLETED = "completed",
   CANCELLED = "cancelled",
 }
+
+// ─── Calendar Sync Status ──────────────────────────────────
+export enum CalendarSyncStatus {
+  PENDING = "PENDING",
+  SYNCED = "SYNCED",
+  FAILED = "FAILED",
+}
+
+// ─── Google Calendar ─────────────────────────────────────
+export const GOOGLE_CALENDAR = {
+  TIMEZONE: "Asia/Kolkata",
+  SCOPES: ["https://www.googleapis.com/auth/calendar"],
+  MEET_REQUEST_ID_PREFIX: "yogshala-meet-",
+  /** Rough seconds per Google Calendar event creation */
+  SECONDS_PER_EVENT: 1.5,
+} as const;
+
+// ─── Class Session Source ──────────────────────────────────
+export enum ClassSessionSource {
+  COURSE_SCHEDULE = "course-schedule",
+  MANUAL = "manual",
+}
+
+/** Weekday index: 0 = Sunday … 6 = Saturday */
+export const CLASS_WEEKDAYS = [
+  { value: 0, label: "Sun", short: "S" },
+  { value: 1, label: "Mon", short: "M" },
+  { value: 2, label: "Tue", short: "T" },
+  { value: 3, label: "Wed", short: "W" },
+  { value: 4, label: "Thu", short: "T" },
+  { value: 5, label: "Fri", short: "F" },
+  { value: 6, label: "Sat", short: "S" },
+] as const;
+
+/** All seven weekdays (Sun=0 … Sat=6) */
+export const ALL_CLASS_DAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+export const BATCH_TIME_DEFAULTS: Record<
+  BatchType,
+  { classStartTime: string; classEndTime: string }
+> = {
+  [BatchType.MORNING]: { classStartTime: "07:00", classEndTime: "08:00" },
+  [BatchType.AFTERNOON]: { classStartTime: "14:00", classEndTime: "15:00" },
+  [BatchType.EVENING]: { classStartTime: "19:00", classEndTime: "20:00" },
+};
+
+/** Fixed slots shown inside each date block on the schedule calendar */
+export const COURSE_TIME_SLOTS = [
+  { key: "morning", label: "7–8 AM", startTime: "07:00", endTime: "08:00", batchType: BatchType.MORNING },
+  { key: "afternoon", label: "2–3 PM", startTime: "14:00", endTime: "15:00", batchType: BatchType.AFTERNOON },
+  { key: "evening", label: "7–8 PM", startTime: "19:00", endTime: "20:00", batchType: BatchType.EVENING },
+] as const;
 
 // ─── HTTP Status Codes ───────────────────────────────────
 export const HTTP_STATUS = {
@@ -116,3 +153,11 @@ export const PHONE_REGEX = /^\+?[1-9]\d{1,14}$/;
 
 // ─── Currency ────────────────────────────────────────────
 export const DEFAULT_CURRENCY = "INR";
+
+// ─── Payment ─────────────────────────────────────────────
+export const PAYMENT = {
+  /** Minutes before a pending checkout session expires */
+  ORDER_EXPIRY_MINS: Number(process.env.PAYMENT_ORDER_EXPIRY_MINS) || 15,
+  /** HTTP header for client-generated idempotency keys */
+  IDEMPOTENCY_HEADER: "Idempotency-Key",
+} as const;

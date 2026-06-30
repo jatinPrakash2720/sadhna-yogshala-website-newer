@@ -5,6 +5,7 @@
 
 import ClassSession from "@/models/ClassSession.model";
 import { connectToDatabase } from "@/config/database";
+import { ClassStatus, ClassSessionSource } from "@/constants";
 import type { IClassSession } from "@/types";
 import mongoose from "mongoose";
 
@@ -76,6 +77,56 @@ export class ClassSessionRepository {
     ]);
 
     return { sessions, total };
+  }
+
+  /**
+   * Find upcoming class sessions with Google Calendar events for given courses.
+   */
+  static async findUpcomingByCourseIds(
+    courseIds: string[]
+  ): Promise<IClassSession[]> {
+    await this.connect();
+
+    if (courseIds.length === 0) {
+      return [];
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    return ClassSession.find({
+      course: { $in: courseIds },
+      status: ClassStatus.UPCOMING,
+      scheduledDate: { $gte: startOfToday },
+      googleEventId: { $exists: true, $ne: null },
+    })
+      .sort({ scheduledDate: 1, startTime: 1 })
+      .lean<IClassSession[]>();
+  }
+
+  /**
+   * Find class sessions for a course by source type.
+   */
+  static async findByCourseAndSource(
+    courseId: string,
+    source: ClassSessionSource
+  ): Promise<IClassSession[]> {
+    await this.connect();
+    return ClassSession.find({ course: courseId, source })
+      .sort({ scheduledDate: 1, startTime: 1 })
+      .lean<IClassSession[]>();
+  }
+
+  /**
+   * Delete class sessions for a course by source type.
+   */
+  static async deleteByCourseAndSource(
+    courseId: string,
+    source: ClassSessionSource
+  ): Promise<number> {
+    await this.connect();
+    const result = await ClassSession.deleteMany({ course: courseId, source });
+    return result.deletedCount ?? 0;
   }
 }
 

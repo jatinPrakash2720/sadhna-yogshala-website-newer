@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable} ${playfair.variable}`}>
-      <body className="font-sans antialiased text-gray-900 bg-white selection:bg-brand-100 selection:text-brand-900">
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${outfit.variable} ${playfair.variable}`}>
+      <body className="font-sans antialiased bg-cream-50 text-gray-900 selection:bg-brand-100 selection:text-brand-900 dark:bg-[#0a120a] dark:text-sage-100 dark:selection:bg-brand-900 dark:selection:text-brand-100">
         <Providers>
           {children}
         </Providers>

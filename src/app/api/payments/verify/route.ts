@@ -12,12 +12,13 @@ import { verifyPaymentSchema } from "@/validations/payment.validation";
 import { PaymentService } from "@/services/payment.service";
 
 export const POST = asyncHandler(
-  withAuth(async (req: NextRequest) => {
+  withAuth(async (req: NextRequest, { user }) => {
     const validation = await validateBody(req, verifyPaymentSchema);
     if (validation.error) return validation.error;
 
     try {
       const payment = await PaymentService.verifyPayment(
+        user.id,
         validation.data.razorpayOrderId,
         validation.data.razorpayPaymentId,
         validation.data.razorpaySignature

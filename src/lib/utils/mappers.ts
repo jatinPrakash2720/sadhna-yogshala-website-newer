@@ -21,8 +21,7 @@ export function mapCourseToCard(course: ICourse): CourseCard {
     duration: 60, // Placeholder in minutes
     level: (course.level as "beginner" | "intermediate" | "advanced") || "beginner",
     category: course.category || "Yoga",
-    isLive: course.meetingPlatform === "zoom" || course.meetingPlatform === "google-meet",
+    isLive: course.meetingPlatform === "google-meet",
     isFeatured: true,
-    tags: course.tags,
   };
 }

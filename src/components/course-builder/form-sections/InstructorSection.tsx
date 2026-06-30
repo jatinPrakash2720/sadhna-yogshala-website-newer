@@ -1,14 +1,25 @@
 "use client";
 
-/**
- * Instructor Section — name, title, bio, instructor image upload
- */
-
+import { useQuery } from "@tanstack/react-query";
 import { UseFormReturn } from "react-hook-form";
 import { motion } from "framer-motion";
-import { User, Camera } from "lucide-react";
+import { User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CourseBuilderFormValues } from "@/hooks/useCourseBuilder";
+
+interface InstructorUser {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+async function fetchInstructorOptions(): Promise<InstructorUser[]> {
+  const res = await fetch("/api/admin/users?limit=100&role=admin");
+  if (!res.ok) throw new Error("Failed to load instructors");
+  const json = await res.json();
+  return json.data ?? [];
+}
 
 interface InstructorSectionProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,14 +27,59 @@ interface InstructorSectionProps {
 }
 
 export default function InstructorSection({ form }: InstructorSectionProps) {
-  const { register, watch, formState: { errors } } = form;
+  const { register, watch, setValue, formState: { errors } } = form;
+  const instructorUserId = watch("instructorUserId") || "";
   const name = watch("instructorName") || "";
   const title = watch("instructorTitle") || "";
   const bio = watch("instructorBio") || "";
 
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ["course-builder-instructors"],
+    queryFn: fetchInstructorOptions,
+  });
+
+  const handleInstructorSelect = (userId: string) => {
+    setValue("instructorUserId", userId, { shouldDirty: true });
+    const selected = users.find((user) => user._id === userId);
+    if (selected) {
+      setValue("instructorName", selected.name, { shouldDirty: true });
+    }
+  };
+
   return (
     <div className="space-y-5">
-      {/* Live mini preview */}
+      <div>
+        <label className="input-label flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5 text-sage-400" />
+          Select Instructor <span className="text-red-500">*</span>
+        </label>
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-sage-500 py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading instructors...
+          </div>
+        ) : (
+          <select
+            value={instructorUserId}
+            onChange={(e) => handleInstructorSelect(e.target.value)}
+            className={cn("input-field", errors.instructorUserId && "border-red-400")}
+          >
+            <option value="">Choose an instructor</option>
+            {users.map((user) => (
+              <option key={user._id} value={user._id}>
+                {user.name} ({user.email})
+              </option>
+            ))}
+          </select>
+        )}
+        {errors.instructorUserId && (
+          <p className="mt-1 text-xs text-red-500">{errors.instructorUserId.message}</p>
+        )}
+        {errors.instructorName && (
+          <p className="mt-1 text-xs text-red-500">{errors.instructorName.message}</p>
+        )}
+      </div>
+
       {name && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -36,35 +92,13 @@ export default function InstructorSection({ form }: InstructorSectionProps) {
           <div className="min-w-0">
             <p className="font-semibold text-gray-900 truncate">{name}</p>
             {title && <p className="text-sm text-brand-600">{title}</p>}
-            {bio && (
-              <p className="text-xs text-sage-500 mt-1 line-clamp-2">{bio}</p>
-            )}
+            {bio && <p className="text-xs text-sage-500 mt-1 line-clamp-2">{bio}</p>}
           </div>
         </motion.div>
       )}
 
-      {/* Instructor Name */}
       <div>
-        <label className="input-label flex items-center gap-1.5">
-          <User className="h-3.5 w-3.5 text-sage-400" />
-          Instructor Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          {...register("instructorName")}
-          placeholder="e.g. Priya Sharma"
-          className={cn("input-field", errors.instructorName && "border-red-400")}
-        />
-        {errors.instructorName && (
-          <p className="mt-1 text-xs text-red-500">{errors.instructorName.message}</p>
-        )}
-      </div>
-
-      {/* Instructor Title */}
-      <div>
-        <label className="input-label">
-          Title / Designation
-          <span className="ml-1 text-xs font-normal text-sage-400">(shown below name)</span>
-        </label>
+        <label className="input-label">Title / Designation</label>
         <input
           {...register("instructorTitle")}
           placeholder="e.g. Senior Yoga Instructor, RYT 500"
@@ -72,31 +106,14 @@ export default function InstructorSection({ form }: InstructorSectionProps) {
         />
       </div>
 
-      {/* Instructor Bio */}
       <div>
         <label className="input-label">Bio</label>
-        <div className="relative">
-          <textarea
-            {...register("instructorBio")}
-            rows={4}
-            placeholder="Brief bio about the instructor — their experience, certifications, teaching style..."
-            className="input-field resize-none pr-16"
-          />
-          <span className="absolute right-3 bottom-3 text-xs text-sage-400">
-            {bio.length}/1000
-          </span>
-        </div>
-      </div>
-
-      {/* Instructor image upload hint */}
-      <div className="flex items-start gap-3 p-3 bg-cream-50 border border-cream-200 rounded-xl">
-        <Camera className="h-4 w-4 text-sage-400 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-medium text-gray-700">Instructor photo</p>
-          <p className="text-xs text-sage-400 mt-0.5">
-            Save the course first, then you can upload an instructor photo via the media endpoint.
-          </p>
-        </div>
+        <textarea
+          {...register("instructorBio")}
+          rows={4}
+          placeholder="Brief bio about the instructor..."
+          className="input-field resize-none"
+        />
       </div>
     </div>
   );

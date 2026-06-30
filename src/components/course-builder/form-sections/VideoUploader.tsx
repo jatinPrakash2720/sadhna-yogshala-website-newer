@@ -6,32 +6,35 @@
 
 import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, X, Play, Video, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, X, Play, Video, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCourseBuilderStore } from "@/store/courseBuilderStore";
 import { useMediaUpload, validateVideoFile, formatFileSize } from "@/hooks/useMediaUpload";
+import { parseMediaUploadField } from "@/lib/courseMedia";
 
 export default function VideoUploader() {
   const { courseId, videoPreview, setVideoPreview } = useCourseBuilderStore();
   const [isDragOver, setIsDragOver] = useState(false);
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const { isUploading, progress, error, upload, reset } = useMediaUpload({
+  const { isUploading, progress, error, upload, deleteCourseMedia, reset } = useMediaUpload({
     courseId,
     mediaType: "introVideo",
-    onSuccess: (data: any) => {
-      const video = data?.introVideo || data?.data?.course?.introVideo;
-      if (video?.url) {
-        setVideoPreview({ 
-          url: video.url, 
+    onSuccess: (result) => {
+      const video = parseMediaUploadField(result, "introVideo");
+      if (video && !Array.isArray(video) && video.url) {
+        setVideoPreview({
+          url: video.url,
           public_id: video.public_id,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          isLocal: false 
+          isLocal: false,
         });
+        setLocalFile(null);
       }
     },
   });
@@ -60,7 +63,17 @@ export default function VideoUploader() {
     if (file) handleFile(file);
   };
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
+    if (isRemoving || isUploading) return;
+
+    const preview = videoPreview;
+    if (preview && !preview.isLocal && preview.public_id) {
+      setIsRemoving(true);
+      const ok = await deleteCourseMedia("introVideo", preview.public_id);
+      setIsRemoving(false);
+      if (!ok) return;
+    }
+
     setVideoPreview(null);
     setLocalFile(null);
     setIsPlaying(false);
@@ -81,6 +94,10 @@ export default function VideoUploader() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">Intro Video</h3>
+        <span className="text-xs text-sage-500">Optional</span>
+      </div>
       <AnimatePresence mode="wait">
         {!videoPreview ? (
           <motion.div
@@ -155,23 +172,16 @@ export default function VideoUploader() {
                 </motion.div>
               )}
             </div>
-            {/* Action buttons */}
-            <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-                className="flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-gray-800 text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-white"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Replace
-              </button>
+            {/* Action buttons — always visible */}
+            <div className="absolute top-3 right-3 flex gap-2 z-10">
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-                className="flex items-center gap-1.5 bg-red-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-600"
+                disabled={isRemoving || isUploading}
+                className="flex items-center gap-1.5 bg-red-500 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-600 disabled:opacity-50"
               >
                 <X className="h-3 w-3" />
-                Remove
+                {isRemoving ? "..." : "Remove"}
               </button>
             </div>
             {/* Status badge */}

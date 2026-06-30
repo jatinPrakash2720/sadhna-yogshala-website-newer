@@ -5,6 +5,7 @@
 
 import Enrollment from "@/models/Enrollment.model";
 import { connectToDatabase } from "@/config/database";
+import { CalendarSyncStatus, PaymentStatus } from "@/constants";
 import type { IEnrollment } from "@/types";
 import mongoose from "mongoose";
 
@@ -118,6 +119,49 @@ export class EnrollmentRepository {
   static async count(filter: mongoose.QueryFilter<IEnrollment> = {}): Promise<number> {
     await this.connect();
     return Enrollment.countDocuments(filter);
+  }
+
+  /**
+   * Find paid enrollments pending Google Calendar attendee sync.
+   */
+  static async findPendingCalendarSyncs(): Promise<IEnrollment[]> {
+    await this.connect();
+    return Enrollment.find({
+      calendarSyncStatus: CalendarSyncStatus.PENDING,
+      paymentStatus: PaymentStatus.PAID,
+    })
+      .populate("student", "name email")
+      .populate("course", "title")
+      .lean<IEnrollment[]>();
+  }
+
+  /**
+   * Update calendar sync status for an enrollment.
+   */
+  static async updateCalendarSyncStatus(
+    id: string,
+    status: CalendarSyncStatus,
+    error?: string
+  ): Promise<IEnrollment | null> {
+    await this.connect();
+
+    const update: mongoose.UpdateQuery<IEnrollment> = {
+      calendarSyncStatus: status,
+    };
+
+    if (status === CalendarSyncStatus.SYNCED) {
+      update.calendarSyncedAt = new Date();
+      update.calendarSyncError = undefined;
+    }
+
+    if (status === CalendarSyncStatus.FAILED && error) {
+      update.calendarSyncError = error.slice(0, 500);
+    }
+
+    return Enrollment.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    }).lean<IEnrollment>();
   }
 }
 

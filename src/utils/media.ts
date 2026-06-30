@@ -6,6 +6,7 @@
 
 import cloudinary from "@/config/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
+import { buildVideoThumbnailUrl } from "@/lib/cloudinaryUrls";
 
 // ─── Constants ───────────────────────────────────────────
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -91,19 +92,7 @@ export async function uploadImage(
     folder: `yogshala-lms/${folder}`,
     public_id: filename,
     resource_type: "image",
-    // Auto-optimize quality and format (WebP/AVIF on supported browsers)
-    transformation: [
-      { quality: "auto:best" },
-      { fetch_format: "auto" },
-    ],
-    // Eager transformations: pre-generate common responsive sizes
-    eager: [
-      { width: 400, crop: "scale", quality: "auto", fetch_format: "auto" },
-      { width: 800, crop: "scale", quality: "auto", fetch_format: "auto" },
-    ],
-    eager_async: true,
     overwrite: true,
-    invalidate: true,
   });
 
   return {
@@ -135,37 +124,15 @@ export async function uploadVideo(
     folder: `yogshala-lms/${folder}`,
     public_id: filename,
     resource_type: "video",
-    // Extract thumbnail at 10% into the video
-    eager: [
-      {
-        width: 800,
-        height: 450,
-        crop: "fill",
-        format: "jpg",
-        quality: "auto",
-        start_offset: "10p", // 10% into video
-      },
-    ],
-    eager_async: false, // Wait for thumbnail generation
     overwrite: true,
-    invalidate: true,
   });
 
-  // Build the auto-generated thumbnail URL
-  const thumbnailUrl = cloudinary.url(result.public_id, {
-    resource_type: "video",
-    format: "jpg",
-    transformation: [
-      { width: 800, height: 450, crop: "fill" },
-      { quality: "auto" },
-      { start_offset: "10p" },
-    ],
-  });
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? "";
 
   return {
     url: result.secure_url,
     public_id: result.public_id,
-    thumbnail: thumbnailUrl,
+    thumbnail: buildVideoThumbnailUrl(cloudName, result.public_id),
     duration: result.duration ?? 0,
   };
 }
@@ -179,7 +146,6 @@ export async function deleteMedia(
   if (!publicId) return;
   await cloudinary.uploader.destroy(publicId, {
     resource_type: resourceType,
-    invalidate: true, // Clear CDN cache
   });
 }
 

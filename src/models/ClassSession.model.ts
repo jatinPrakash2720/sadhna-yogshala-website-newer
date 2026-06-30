@@ -4,7 +4,7 @@
  */
 
 import mongoose, { Schema, type Model } from "mongoose";
-import { ClassStatus } from "@/constants";
+import { ClassStatus, ClassSessionSource } from "@/constants";
 import type { IClassSession } from "@/types";
 
 const classSessionSchema = new Schema<IClassSession>(
@@ -25,6 +25,11 @@ const classSessionSchema = new Schema<IClassSession>(
       type: String,
       trim: true,
     },
+    googleEventId: {
+      type: String,
+      trim: true,
+      sparse: true,
+    },
     scheduledDate: {
       type: Date,
       required: [true, "Scheduled date is required"],
@@ -44,6 +49,15 @@ const classSessionSchema = new Schema<IClassSession>(
       enum: Object.values(ClassStatus),
       default: ClassStatus.UPCOMING,
     },
+    source: {
+      type: String,
+      enum: Object.values(ClassSessionSource),
+      default: ClassSessionSource.MANUAL,
+    },
+    sessionNumber: {
+      type: Number,
+      min: 1,
+    },
   },
   {
     timestamps: true,
@@ -59,6 +73,8 @@ const classSessionSchema = new Schema<IClassSession>(
 // ─── Indexes ─────────────────────────────────────────────
 classSessionSchema.index({ course: 1, scheduledDate: 1 });
 classSessionSchema.index({ status: 1 });
+classSessionSchema.index({ course: 1, status: 1, scheduledDate: 1 });
+classSessionSchema.index({ course: 1, source: 1 });
 
 const ClassSession: Model<IClassSession> =
   mongoose.models.ClassSession ||

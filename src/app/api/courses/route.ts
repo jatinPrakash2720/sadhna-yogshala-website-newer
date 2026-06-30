@@ -43,11 +43,13 @@ export const POST = asyncHandler(
     const validation = await validateBody(req, createCourseSchema);
     if (validation.error) return validation.error;
 
-    const course = await CourseService.create(validation.data);
+    const result = await CourseService.create(validation.data);
 
     return sendCreated(
-      { course },
-      "Course created successfully"
+      result,
+      result.calendarJob
+        ? "Course saved as draft. Google Meet links are being generated."
+        : "Course saved as draft"
     );
   })
 );

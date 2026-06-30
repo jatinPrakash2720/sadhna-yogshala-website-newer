@@ -52,12 +52,17 @@ export const PUT = asyncHandler(
     const validation = await validateBody(req, updateCourseSchema);
     if (validation.error) return validation.error;
 
-    const course = await CourseService.update(id, validation.data);
-    if (!course) {
+    const result = await CourseService.update(id, validation.data);
+    if (!result) {
       return sendNotFound("Course not found");
     }
 
-    return sendSuccess({ course }, "Course updated successfully");
+    return sendSuccess(
+      result,
+      result.calendarJob
+        ? "Course saved as draft. Google Meet links are being generated."
+        : "Course saved as draft"
+    );
   })
 );
 
